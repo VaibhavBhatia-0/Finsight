@@ -21,25 +21,17 @@ export class ScenarioService {
     benchmarkCode?: string;
     taxRuleId?: string | number;
     feeRate?: number;
+    contributionFrequency?: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
+    assets?: Array<{ stockId?: string | number; symbol?: string; weight: number }>;
   }) {
-    let stock: any = null;
-    if (input.stockId) {
-      stock = await StockRepository.findById(input.stockId);
-    } else if (input.symbol) {
-      stock = await StockRepository.findBySymbol(input.symbol);
+    const mode = input.scenarioType || 'SINGLE_INVESTMENT';
+    if (!['SINGLE_INVESTMENT', 'RECURRING_INVESTMENT', 'PORTFOLIO_SCENARIO'].includes(mode)) {
+      throw new AppError('Unsupported scenario type', 400, 'INVALID_SCENARIO_TYPE');
+    }
+    if (!input.startDate || !input.endDate || input.startDate >= input.endDate || !(input.initialAmount > 0)) {
+      throw new AppError('A positive amount and valid date range are required', 400, 'INVALID_SCENARIO');
     }
 
-    if (!stock) {
-      throw new AppError('A valid stock must be selected for the simulation', 400, 'INVALID_STOCK');
-    }
-
-    // Fetch price history
-    const prices = await MarketDataService.getPriceHistory(stock.id, stock.symbol, input.startDate, input.endDate);
-    if (prices.length === 0) {
-      throw new AppError(`No price observations found for ${stock.symbol} in the given period`, 400, 'NO_DATA');
-    }
-
-    // Fetch benchmark prices if benchmark specified
     let benchmarkPrices: any[] = [];
     if (input.benchmarkCode) {
       const benchStock = await StockRepository.findBySymbol(input.benchmarkCode);
@@ -47,18 +39,6 @@ export class ScenarioService {
         benchmarkPrices = await MarketDataService.getPriceHistory(benchStock.id, benchStock.symbol, input.startDate, input.endDate);
       }
     }
-
-    // Fetch exchange rates for start and end dates
-    const startFx = await FXService.getRate('USD', 'INR', input.startDate);
-    const endFx = await FXService.getRate('USD', 'INR', input.endDate);
-    const fxRates = [
-      { base_currency: 'USD', quote_currency: 'INR', date: input.startDate, rate: startFx },
-      { base_currency: 'USD', quote_currency: 'INR', date: input.endDate, rate: endFx },
-    ];
-
-    // Fetch dividends and corporate actions
-    const dividends = await StockRepository.getDividends(stock.id);
-    const corporateActions = await StockRepository.getCorporateActions(stock.id);
 
     // Fetch tax rule if applicable
     let taxRate = 0.125; // default 12.5% LTCG
@@ -70,22 +50,63 @@ export class ScenarioService {
     }
 
     const payload = {
-      mode: input.scenarioType || 'SINGLE_INVESTMENT',
+      mode,
       initial_amount: input.initialAmount,
       base_currency: input.baseCurrency,
-      asset_currency: stock.currency,
       start_date: input.startDate,
       end_date: input.endDate,
-      price_history: prices,
-      exchange_rates: fxRates,
-      dividends,
-      corporate_actions: corporateActions,
       benchmark_price_history: benchmarkPrices,
       fee_rate: input.feeRate ?? 0.001,
       tax_rate: taxRate,
+      contribution_frequency: input.contributionFrequency || 'MONTHLY',
     };
 
-    const simulationResult = await AnalyticsService.runScript('simulations/simulator.py', payload);
+    if (mode === 'PORTFOLIO_SCENARIO') {
+      if (!input.assets || input.assets.length < 2) throw new AppError('Portfolio scenarios require at least two assets', 400, 'INVALID_PORTFOLIO_ASSETS');
+      const weightTotal = input.assets.reduce((total, asset) => total + Number(asset.weight), 0);
+      if (input.assets.some(asset => !(Number(asset.weight) > 0)) || Math.abs(weightTotal - 1) > 1e-8) throw new AppError('Portfolio weights must be positive and sum to 1', 400, 'INVALID_PORTFOLIO_WEIGHTS');
+      const preparedAssets = await Promise.all(input.assets.map(asset => this.prepareAsset(asset, input)));
+      const simulationResult = await AnalyticsService.runScript('simulations/simulator.py', { ...payload, assets: preparedAssets.map(({ stock: _stock, ...data }) => data) });
+      return { assets: preparedAssets.map(({ stock, weight }) => ({ ...stock, weight })), ...simulationResult };
+    }
+
+    const prepared = await this.prepareAsset({ stockId: input.stockId, symbol: input.symbol, weight: 1 }, input);
+    const { stock, weight: _weight, ...assetPayload } = prepared;
+    const simulationResult = await AnalyticsService.runScript('simulations/simulator.py', { ...payload, ...assetPayload });
+    return { stock, ...simulationResult };
+  }
+
+  private static async prepareAsset(
+    selection: { stockId?: string | number; symbol?: string; weight: number },
+    input: { startDate: string; endDate: string; baseCurrency: string; scenarioType?: string; contributionFrequency?: string },
+  ) {
+    const stock = selection.stockId ? await StockRepository.findById(selection.stockId) : selection.symbol ? await StockRepository.findBySymbol(selection.symbol) : null;
+    if (!stock) throw new AppError('A valid stock must be selected for the simulation', 400, 'INVALID_STOCK');
+    const prices = await MarketDataService.getPriceHistory(stock.id, stock.symbol, input.startDate, input.endDate);
+    if (!prices.length) throw new AppError(`No price observations found for ${stock.symbol} in the given period`, 400, 'NO_DATA');
+    const dividends = (await StockRepository.getDividends(stock.id)).filter(row => row.ex_date > input.startDate && row.ex_date <= input.endDate);
+    const corporateActions = (await StockRepository.getCorporateActions(stock.id)).filter(row => row.action_date > input.startDate && row.action_date <= input.endDate);
+    const fxDates = new Set<string>([input.startDate, input.endDate, ...dividends.map(row => row.ex_date)]);
+    if (input.scenarioType === 'RECURRING_INVESTMENT') {
+      const step = input.contributionFrequency === 'QUARTERLY' ? 3 : input.contributionFrequency === 'ANNUALLY' ? 12 : 1;
+      let cursor = new Date(`${input.startDate}T00:00:00Z`);
+      const end = new Date(`${input.endDate}T00:00:00Z`);
+      while (cursor <= end) {
+        const scheduled = cursor.toISOString().slice(0, 10);
+        const trade = prices.find(row => row.date >= scheduled);
+        if (trade && trade.date <= input.endDate) fxDates.add(trade.date);
+        const day = cursor.getUTCDate();
+        cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + step, 1));
+        const lastDay = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0)).getUTCDate();
+        cursor.setUTCDate(Math.min(day, lastDay));
+      }
+    }
+    const exchangeRates = await Promise.all([...fxDates].map(async date => ({
+      base_currency: stock.currency,
+      quote_currency: input.baseCurrency,
+      date,
+      rate: await FXService.getRate(stock.currency, input.baseCurrency, date),
+    })));
     return {
       stock: {
         id: stock.id,
@@ -93,7 +114,13 @@ export class ScenarioService {
         name: stock.company_name,
         currency: stock.currency,
       },
-      ...simulationResult,
+      symbol: stock.symbol,
+      weight: Number(selection.weight),
+      asset_currency: stock.currency,
+      price_history: prices,
+      exchange_rates: exchangeRates,
+      dividends,
+      corporate_actions: corporateActions,
     };
   }
 
@@ -133,4 +160,3 @@ export class ScenarioService {
     };
   }
 }
-

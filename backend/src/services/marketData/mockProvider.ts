@@ -10,7 +10,7 @@ export interface StockQuote {
   open: number;
   previousClose: number;
   volume: number;
-  freshness: 'Live' | 'Delayed' | 'End-of-day' | 'Historical';
+  freshness: 'Synthetic';
   timestamp: string;
 }
 
@@ -68,7 +68,7 @@ export class MockMarketDataProvider {
       low: round2(Math.min(currentPrice, prevClose) * 0.992),
       previousClose: prevClose,
       volume: 1500000 + (hash % 1000000),
-      freshness: 'Delayed',
+      freshness: 'Synthetic',
       timestamp: new Date().toISOString(),
     };
   }

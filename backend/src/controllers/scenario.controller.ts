@@ -7,7 +7,7 @@ export class ScenarioController {
   static async runSimulation(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await ScenarioService.runSimulation(req.body);
-      sendSuccess(res, result, 200, 'Historical');
+      sendSuccess(res, result, 200, 'Synthetic', { source: 'FINSIGHT_DEVELOPMENT_FIXTURE', degraded: true });
     } catch (error) {
       next(error);
     }
@@ -79,4 +79,3 @@ export class ScenarioController {
     }
   }
 }
-

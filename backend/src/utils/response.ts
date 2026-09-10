@@ -1,6 +1,6 @@
 import { Response } from 'express';
 
-export type DataFreshness = 'Live' | 'Delayed' | 'End-of-day' | 'Historical' | 'Static';
+export type DataFreshness = 'Live' | 'Delayed' | 'End-of-day' | 'Historical' | 'Static' | 'Synthetic';
 
 export interface ApiSuccessResponse<T = any> {
   success: true;
@@ -59,4 +59,3 @@ export function sendError(
   };
   return res.status(statusCode).json(responsePayload);
 }
-

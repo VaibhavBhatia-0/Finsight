@@ -1,14 +1,20 @@
 import { MockMarketDataProvider, StockQuote, StockFundamentalData } from './marketData/mockProvider';
 import { StockRepository, StockRow } from '../repositories/stock.repository';
 import { PriceHistoryRepository, PriceBar } from '../repositories/priceHistory.repository';
+import { AppError } from '../middleware/errorHandler';
 
 export class MarketDataService {
+  private static assertMockIsAllowed(): void {
+    if (process.env.NODE_ENV === 'production') {
+      throw new AppError('No licensed production market-data provider is configured', 503, 'MARKET_DATA_UNAVAILABLE');
+    }
+  }
   /**
    * Retrieves real-time or delayed quote for a symbol.
    * Checks database cache or delegates to the active provider adapter.
    */
   public static async getQuote(symbol: string): Promise<StockQuote> {
-    // Current active adapter is MockMarketDataProvider (Production provider selection is an open item)
+    this.assertMockIsAllowed();
     return MockMarketDataProvider.getQuote(symbol);
   }
 
@@ -25,12 +31,10 @@ export class MarketDataService {
     let prices = await PriceHistoryRepository.getPrices(stockId, startDate, endDate);
 
     if (prices.length === 0) {
-      // Generate and cache from provider
+      this.assertMockIsAllowed();
+      // Development-only synthetic history is never persisted as an observation.
       const generated = MockMarketDataProvider.generateHistoricalPrices(symbol, 1825); // 5 years
-      for (const bar of generated) {
-        await PriceHistoryRepository.savePriceBar(stockId, bar);
-      }
-      prices = await PriceHistoryRepository.getPrices(stockId, startDate, endDate);
+      prices = generated.filter((bar) => (!startDate || bar.date >= startDate) && (!endDate || bar.date <= endDate));
     }
 
     return prices;
@@ -40,6 +44,7 @@ export class MarketDataService {
    * Retrieves comprehensive fundamental and technical indicators.
    */
   public static async getStockFundamentals(symbol: string): Promise<StockFundamentalData> {
+    this.assertMockIsAllowed();
     return MockMarketDataProvider.getFundamentals(symbol);
   }
 
@@ -47,6 +52,7 @@ export class MarketDataService {
    * Market overview covering Indian and US market indices.
    */
   public static async getMarketOverview() {
+    this.assertMockIsAllowed();
     const indices = [
       { code: 'NIFTY_50', name: 'NIFTY 50', country: 'IN', currency: 'INR' },
       { code: 'SENSEX', name: 'BSE SENSEX', country: 'IN', currency: 'INR' },
@@ -95,6 +101,7 @@ export class MarketDataService {
     page?: number;
     limit?: number;
   }) {
+    this.assertMockIsAllowed();
     const allStocks = await StockRepository.findAll();
     let screened = allStocks.map((stock) => {
       const quote = MockMarketDataProvider.getQuote(stock.symbol);

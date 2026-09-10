@@ -1,13 +1,14 @@
 // src/pages/ScreenerPage.tsx
 import React, { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Search, X, ArrowUp, ArrowDown, Plus } from "lucide-react";
-import { api } from "../api/client";
+import api from "../api/client";
 import { FreshnessBadge } from "../components/FreshnessBadge";
-import { useAuth } from "../hooks/useAuth";
+import { useWatchlist } from "../hooks/useWatchlist";
 
 interface Stock {
+  id: string;
   symbol: string;
   name: string;
   exchange: string;
@@ -26,7 +27,11 @@ interface Stock {
   volume: number | null;
   week52Low: number | null;
   week52High: number | null;
-  freshness: "live" | "delayed" | "eod" | "historical";
+}
+
+interface ScreenerResult {
+  items: Stock[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
 const buildQueryParams = (filters: Record<string, any>) => {
@@ -39,8 +44,7 @@ const buildQueryParams = (filters: Record<string, any>) => {
 
 export const ScreenerPage: React.FC = () => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const watchlist = useWatchlist();
 
   // Filter state
   const [exchange, setExchange] = useState("");
@@ -127,23 +131,14 @@ export const ScreenerPage: React.FC = () => {
     page,
   ]);
 
-  const { data, isLoading, isError, error } = useQuery<Stock[]>(
-    ["stocks", filters],
-    async () => {
+  const { data, isLoading, isError, error } = useQuery<ScreenerResult>({
+    queryKey: ["stocks", filters],
+    queryFn: async () => {
       const qs = buildQueryParams(filters);
-      const resp = await api.get<Stock[]>(`/api/v1/stocks?${qs}`);
+      const resp = await api.get<ScreenerResult>(`/api/v1/markets/screener?${qs}`);
       return resp.data;
     },
-    { keepPreviousData: true }
-  );
-
-  const addToWatchlist = useMutation(
-    async (symbol: string) => {
-      if (!user) throw new Error("Unauthenticated");
-      await api.post(`/api/v1/watchlist`, { symbol });
-    },
-    { onSuccess: () => queryClient.invalidateQueries(["watchlist"]) }
-  );
+  });
 
   const handleReset = () => {
     setExchange("");
@@ -181,12 +176,8 @@ export const ScreenerPage: React.FC = () => {
     }
   };
 
-  const totalPages = data ? Math.ceil(data.length / pageSize) : 1;
-  const displayedStocks = useMemo(() => {
-    if (!data) return [];
-    const start = (page - 1) * pageSize;
-    return data.slice(start, start + pageSize);
-  }, [data, page]);
+  const totalPages = data?.pagination.totalPages ?? 1;
+  const displayedStocks = data?.items ?? [];
 
   return (
     <div className="p-4 max-w-7xl mx-auto">
@@ -242,8 +233,8 @@ export const ScreenerPage: React.FC = () => {
       </div>
       {isLoading && <p className="text-center py-8" role="status">Loading stocks…</p>}
       {isError && <p className="text-center text-red-600 py-8" role="alert">Error loading stocks: {(error as Error).message}</p>}
-      {!isLoading && data && data.length === 0 && <p className="text-center py-8" role="status">No stocks match the current filters.</p>}
-      {!isLoading && data && data.length > 0 && (
+      {!isLoading && data && data.items.length === 0 && <p className="text-center py-8" role="status">No stocks match the current filters.</p>}
+      {!isLoading && data && data.items.length > 0 && (
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse" role="table">
             <thead className="bg-gray-100 dark:bg-gray-700">
@@ -267,9 +258,9 @@ export const ScreenerPage: React.FC = () => {
                   <td className="px-4 py-2">{stock.exchange}</td>
                   <td className="px-4 py-2">{stock.sector}</td>
                   <td className="px-4 py-2">{Intl.NumberFormat("en-US", { notation: "compact" }).format(stock.marketCap)}</td>
-                  <td className="px-4 py-2"><FreshnessBadge status={stock.freshness} /></td>
+                  <td className="px-4 py-2"><FreshnessBadge freshness="Synthetic" /></td>
                   <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => addToWatchlist.mutate(stock.symbol)} className="text-primary hover:text-primary-dark" aria-label={`Add ${stock.symbol} to watchlist`}>
+                    <button onClick={() => watchlist.addToWatchlist(stock.id)} className="text-primary hover:text-primary-dark" aria-label={`Add ${stock.symbol} to watchlist`}>
                       <Plus size={16} aria-hidden="true" />
                     </button>
                   </td>
@@ -279,7 +270,7 @@ export const ScreenerPage: React.FC = () => {
           </table>
         </div>
       )}
-      {data && data.length > 0 && (
+      {data && data.items.length > 0 && (
         <nav className="flex items-center justify-between mt-4" aria-label="Pagination">
           <button disabled={page === 1} onClick={() => setPage(p => Math.max(p - 1, 1))} className="px-3 py-1 border rounded disabled:opacity-50">Previous</button>
           <span className="text-sm">Page {page} of {totalPages}</span>

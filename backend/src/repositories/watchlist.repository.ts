@@ -40,19 +40,33 @@ export class WatchlistRepository {
     return res.rows[0];
   }
 
-  static async addItem(watchlistId: string | number, stockId: string | number): Promise<void> {
-    await db.query(`
-      INSERT INTO watchlist_items (watchlist_id, stock_id)
-      VALUES ($1, $2)
-      ON CONFLICT (watchlist_id, stock_id) DO NOTHING;
-    `, [watchlistId, stockId]);
+  static async addItem(watchlistId: string | number, stockId: string | number, userId: string): Promise<boolean> {
+    const result = await db.query<{ owned: boolean }>(`
+      WITH owned AS (
+        SELECT id FROM watchlists WHERE id = $1 AND user_id = $3
+      ), inserted AS (
+        INSERT INTO watchlist_items (watchlist_id, stock_id)
+        SELECT id, $2 FROM owned
+        ON CONFLICT (watchlist_id, stock_id) DO NOTHING
+        RETURNING 1
+      )
+      SELECT EXISTS(SELECT 1 FROM owned) AS owned;
+    `, [watchlistId, stockId, userId]);
+    return Boolean(result.rows[0]?.owned);
   }
 
-  static async removeItem(watchlistId: string | number, stockId: string | number): Promise<void> {
-    await db.query(`
-      DELETE FROM watchlist_items
-      WHERE watchlist_id = $1 AND stock_id = $2;
-    `, [watchlistId, stockId]);
+  static async removeItem(watchlistId: string | number, stockId: string | number, userId: string): Promise<boolean> {
+    const result = await db.query<{ owned: boolean }>(`
+      WITH owned AS (
+        SELECT id FROM watchlists WHERE id = $1 AND user_id = $3
+      ), deleted AS (
+        DELETE FROM watchlist_items
+        WHERE watchlist_id IN (SELECT id FROM owned) AND stock_id = $2
+        RETURNING 1
+      )
+      SELECT EXISTS(SELECT 1 FROM owned) AS owned;
+    `, [watchlistId, stockId, userId]);
+    return Boolean(result.rows[0]?.owned);
   }
 
   static async delete(id: string | number, userId: string): Promise<void> {
@@ -62,4 +76,3 @@ export class WatchlistRepository {
     `, [id, userId]);
   }
 }
-

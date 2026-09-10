@@ -1,194 +1,122 @@
-"""
-FinSight Analytics - Core Financial Metrics Engine
-Implements deterministic formulas for returns, CAGR, XIRR, Volatility, Sharpe Ratio,
-Maximum Drawdown, Beta, and Correlation.
-"""
+"""Deterministic, dependency-free financial metrics used by simulations and backtests."""
 
 import math
 from datetime import datetime
-from typing import List, Tuple, Dict, Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+DAYS_PER_YEAR = 365.25
+TRADING_DAYS_PER_YEAR = 252
+
 
 def calculate_returns(initial_value: float, final_value: float) -> Dict[str, float]:
-    """Calculate absolute and percentage returns."""
     if initial_value <= 0:
         return {"absolute_return": 0.0, "return_percentage": 0.0}
-    
     absolute = final_value - initial_value
-    percentage = (absolute / initial_value) * 100.0
-    return {
-        "absolute_return": round(absolute, 4),
-        "return_percentage": round(percentage, 4)
-    }
+    return {"absolute_return": round(absolute, 4), "return_percentage": round(absolute / initial_value * 100, 4)}
+
 
 def calculate_cagr(initial_value: float, final_value: float, start_date_str: str, end_date_str: str) -> float:
-    """
-    Calculate Compound Annual Growth Rate (CAGR).
-    Formula: (final_value / initial_value) ** (1 / years) - 1
-    """
+    """Annualized CAGR as a percentage; only valid for positive values and a positive interval."""
     if initial_value <= 0 or final_value <= 0:
         return 0.0
-
-    d1 = datetime.strptime(start_date_str, "%Y-%m-%d")
-    d2 = datetime.strptime(end_date_str, "%Y-%m-%d")
-    days = (d2 - d1).days
-
+    start = datetime.strptime(start_date_str, "%Y-%m-%d")
+    end = datetime.strptime(end_date_str, "%Y-%m-%d")
+    days = (end - start).days
     if days <= 0:
         return 0.0
+    return round(((final_value / initial_value) ** (DAYS_PER_YEAR / days) - 1) * 100, 6)
 
-    years = days / 365.25
-    if years < 0.08:  # Less than 1 month, annualization is misleading
-        return round(((final_value - initial_value) / initial_value) * 100.0, 4)
 
-    cagr = ((final_value / initial_value) ** (1.0 / years) - 1.0) * 100.0
-    return round(cagr, 4)
+def calculate_xirr(cash_flows: List[Tuple[str, float]], max_iter: int = 256) -> Optional[float]:
+    """Solve dated NPV with a bracketed bisection method and return an annual percentage rate."""
+    if len(cash_flows) < 2 or not any(v < 0 for _, v in cash_flows) or not any(v > 0 for _, v in cash_flows):
+        return None
+    ordered = sorted((datetime.strptime(date, "%Y-%m-%d"), float(value)) for date, value in cash_flows)
+    origin = ordered[0][0]
+    flows = [((date - origin).days / DAYS_PER_YEAR, value) for date, value in ordered]
 
-def calculate_xirr(cash_flows: List[Tuple[str, float]], guess: float = 0.1, max_iter: int = 100) -> Optional[float]:
-    """
-    Calculate Extended Internal Rate of Return (XIRR) using Newton-Raphson.
-    cash_flows: List of (date_str 'YYYY-MM-DD', amount)
-    Investments are negative amounts, inflows/final valuation are positive.
-    """
-    if len(cash_flows) < 2:
+    def npv(rate: float) -> float:
+        return sum(value / ((1 + rate) ** years) for years, value in flows)
+
+    low, high = -0.999999999, 1.0
+    low_value, high_value = npv(low), npv(high)
+    while low_value * high_value > 0 and high < 1_000_000:
+        high *= 2
+        high_value = npv(high)
+    if not math.isfinite(low_value) or not math.isfinite(high_value) or low_value * high_value > 0:
         return None
 
-    # Check for at least one positive and one negative cash flow
-    has_pos = any(cf[1] > 0 for cf in cash_flows)
-    has_neg = any(cf[1] < 0 for cf in cash_flows)
-    if not (has_pos and has_neg):
-        return None
-
-    parsed_flows = []
-    base_date = datetime.strptime(cash_flows[0][0], "%Y-%m-%d")
-
-    for dt_str, amount in cash_flows:
-        dt = datetime.strptime(dt_str, "%Y-%m-%d")
-        fractional_years = (dt - base_date).days / 365.25
-        parsed_flows.append((fractional_years, amount))
-
-    # Newton-Raphson solver
-    rate = guess
+    scale = max(1.0, sum(abs(value) for _, value in flows))
+    midpoint = 0.0
     for _ in range(max_iter):
-        npv = 0.0
-        d_npv = 0.0
-        for t, amount in parsed_flows:
-            denom = (1.0 + rate) ** t
-            if denom == 0:
-                denom = 1e-10
-            npv += amount / denom
-            if t != 0:
-                d_npv -= (t * amount) / ((1.0 + rate) ** (t + 1.0))
+        midpoint = (low + high) / 2
+        value = npv(midpoint)
+        if abs(value) <= scale * 1e-12 or high - low <= 1e-12:
+            return round(midpoint * 100, 8)
+        if low_value * value <= 0:
+            high, high_value = midpoint, value
+        else:
+            low, low_value = midpoint, value
+    return None
 
-        if abs(d_npv) < 1e-10:
-            break
 
-        new_rate = rate - (npv / d_npv)
-        if abs(new_rate - rate) < 1e-6:
-            return round(new_rate * 100.0, 4)
-        rate = new_rate
+def _returns(prices: List[float]) -> List[float]:
+    return [(current / previous) - 1 for previous, current in zip(prices, prices[1:]) if previous > 0]
 
-    # Return percentage rate
-    return round(rate * 100.0, 4)
 
-def calculate_volatility(prices: List[float], annualization_factor: int = 252) -> float:
-    """
-    Annualized volatility of price returns.
-    Formula: std_dev(daily_returns) * sqrt(annualization_factor) * 100
-    """
-    if len(prices) < 3:
+def _sample_standard_deviation(values: List[float]) -> float:
+    if len(values) < 2:
         return 0.0
+    mean = sum(values) / len(values)
+    return math.sqrt(sum((value - mean) ** 2 for value in values) / (len(values) - 1))
 
-    returns = []
-    for i in range(1, len(prices)):
-        p_prev = prices[i - 1]
-        p_curr = prices[i]
-        if p_prev > 0:
-            returns.append((p_curr - p_prev) / p_prev)
 
-    if not returns:
+def calculate_volatility(prices: List[float], annualization_factor: int = TRADING_DAYS_PER_YEAR) -> float:
+    daily_returns = _returns(prices)
+    return round(_sample_standard_deviation(daily_returns) * math.sqrt(annualization_factor) * 100, 6)
+
+
+def calculate_sharpe_ratio(prices: List[float], risk_free_rate: float = 0.065, annualization_factor: int = TRADING_DAYS_PER_YEAR) -> float:
+    daily_returns = _returns(prices)
+    standard_deviation = _sample_standard_deviation(daily_returns)
+    if len(daily_returns) < 2 or standard_deviation == 0:
         return 0.0
+    daily_risk_free = (1 + risk_free_rate) ** (1 / annualization_factor) - 1
+    excess_mean = sum(value - daily_risk_free for value in daily_returns) / len(daily_returns)
+    return round(excess_mean / standard_deviation * math.sqrt(annualization_factor), 8)
 
-    mean = sum(returns) / len(returns)
-    variance = sum((r - mean) ** 2 for r in returns) / (len(returns) - 1)
-    std_dev = math.sqrt(variance)
 
-    annualized_vol = std_dev * math.sqrt(annualization_factor) * 100.0
-    return round(annualized_vol, 4)
-
-def calculate_sharpe_ratio(prices: List[float], risk_free_rate: float = 0.065, annualization_factor: int = 252) -> float:
-    """
-    Annualized Sharpe Ratio.
-    Formula: (annualized_return - risk_free_rate) / annualized_volatility
-    """
-    if len(prices) < 10:
+def calculate_max_drawdown(values: List[float]) -> float:
+    if len(values) < 2:
         return 0.0
+    peak = values[0]
+    maximum = 0.0
+    for value in values:
+        peak = max(peak, value)
+        if peak > 0:
+            maximum = max(maximum, (peak - value) / peak)
+    return round(maximum * 100, 6)
 
-    returns = []
-    for i in range(1, len(prices)):
-        p_prev = prices[i - 1]
-        p_curr = prices[i]
-        if p_prev > 0:
-            returns.append((p_curr - p_prev) / p_prev)
 
-    if not returns:
-        return 0.0
+def calculate_beta(asset_prices: List[float], benchmark_prices: List[float]) -> Optional[float]:
+    count = min(len(asset_prices), len(benchmark_prices))
+    if count < 3:
+        return None
+    asset_returns = _returns(asset_prices[:count])
+    benchmark_returns = _returns(benchmark_prices[:count])
+    count = min(len(asset_returns), len(benchmark_returns))
+    if count < 2:
+        return None
+    asset_mean = sum(asset_returns[:count]) / count
+    benchmark_mean = sum(benchmark_returns[:count]) / count
+    covariance = sum((asset_returns[i] - asset_mean) * (benchmark_returns[i] - benchmark_mean) for i in range(count)) / (count - 1)
+    variance = sum((value - benchmark_mean) ** 2 for value in benchmark_returns[:count]) / (count - 1)
+    return None if variance == 0 else round(covariance / variance, 8)
 
-    mean_daily = sum(returns) / len(returns)
-    annualized_return = mean_daily * annualization_factor
 
-    variance = sum((r - mean_daily) ** 2 for r in returns) / (len(returns) - 1)
-    annualized_vol = math.sqrt(variance) * math.sqrt(annualization_factor)
-
-    if annualized_vol == 0:
-        return 0.0
-
-    sharpe = (annualized_return - risk_free_rate) / annualized_vol
-    return round(sharpe, 4)
-
-def calculate_max_drawdown(prices: List[float]) -> float:
-    """
-    Maximum peak-to-trough decline.
-    Formula: max((peak - trough) / peak) * 100
-    """
-    if not prices or len(prices) < 2:
-        return 0.0
-
-    peak = prices[0]
-    max_dd = 0.0
-
-    for price in prices:
-        if price > peak:
-            peak = price
-        elif peak > 0:
-            dd = (peak - price) / peak
-            if dd > max_dd:
-                max_dd = dd
-
-    return round(max_dd * 100.0, 4)
-
-def calculate_beta(asset_prices: List[float], benchmark_prices: List[float]) -> float:
-    """
-    Beta of asset relative to benchmark.
-    Formula: Covariance(asset, bench) / Variance(bench)
-    """
-    n = min(len(asset_prices), len(benchmark_prices))
-    if n < 5:
-        return 1.0
-
-    r_asset = [(asset_prices[i] - asset_prices[i - 1]) / asset_prices[i - 1] for i in range(1, n) if asset_prices[i - 1] > 0]
-    r_bench = [(benchmark_prices[i] - benchmark_prices[i - 1]) / benchmark_prices[i - 1] for i in range(1, n) if benchmark_prices[i - 1] > 0]
-
-    count = min(len(r_asset), len(r_bench))
-    if count < 5:
-        return 1.0
-
-    mean_a = sum(r_asset[:count]) / count
-    mean_b = sum(r_bench[:count]) / count
-
-    cov = sum((r_asset[i] - mean_a) * (r_bench[i] - mean_b) for i in range(count)) / (count - 1)
-    var_b = sum((r_bench[i] - mean_b) ** 2 for i in range(count)) / (count - 1)
-
-    if var_b == 0:
-        return 1.0
-
-    return round(cov / var_b, 4)
-
+def calculate_beta_dated(asset_values: List[Dict[str, Any]], benchmark_values: List[Dict[str, Any]]) -> Optional[float]:
+    """Calculate beta only after an inner join by observation date."""
+    asset_by_date = {row["date"]: float(row["value"]) for row in asset_values}
+    benchmark_by_date = {row["date"]: float(row["value"]) for row in benchmark_values}
+    dates = sorted(set(asset_by_date).intersection(benchmark_by_date))
+    return calculate_beta([asset_by_date[date] for date in dates], [benchmark_by_date[date] for date in dates])

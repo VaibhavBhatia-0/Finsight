@@ -1,98 +1,15 @@
-import React from "react";
-import { useForm, SubmitHandler } from "react-hook-form";
-import { useRunBacktest, useBacktest } from "../../hooks/useBacktest";
-import LabResultView from "./LabResultView";
-import { Loader2 } from "lucide-react";
+import { useForm, type SubmitHandler } from 'react-hook-form';
+import { Loader2 } from 'lucide-react';
+import { useRunScenario } from '../../hooks/useScenario';
+import LabResultView from './LabResultView';
 
-interface FormValues {
-  asset: string;
-  amount: number;
-  frequency: string; // e.g., monthly, quarterly, annually
-  startDate: string;
-  endDate: string;
-  currency?: string;
-  benchmark?: string;
+interface FormValues { asset: string; amount: number; frequency: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY'; startDate: string; endDate: string; currency: string; benchmark?: string }
+
+export default function RecurringInvestmentPage() {
+  const { register, handleSubmit, reset } = useForm<FormValues>({ defaultValues: { currency: 'INR', frequency: 'MONTHLY' } });
+  const runScenario = useRunScenario();
+  const submit: SubmitHandler<FormValues> = async (data) => {
+    await runScenario.mutateAsync({ scenarioType: 'RECURRING_INVESTMENT', symbol: data.asset, initialAmount: data.amount, contributionFrequency: data.frequency, startDate: data.startDate, endDate: data.endDate, baseCurrency: data.currency, benchmarkCode: data.benchmark });
+  };
+  return <section className="mx-auto max-w-2xl p-4"><h1 className="mb-4 text-2xl font-bold">Recurring Investment Lab</h1><form onSubmit={handleSubmit(submit)} className="space-y-4"><label className="block text-sm font-medium">Asset symbol<input {...register('asset', { required: true })} className="mt-1 w-full rounded border px-3 py-2" placeholder="AAPL" /></label><div className="grid grid-cols-2 gap-4"><label className="block text-sm font-medium">Start date<input type="date" {...register('startDate', { required: true })} className="mt-1 w-full rounded border px-3 py-2" /></label><label className="block text-sm font-medium">End date<input type="date" {...register('endDate', { required: true })} className="mt-1 w-full rounded border px-3 py-2" /></label></div><label className="block text-sm font-medium">Contribution amount<input type="number" min="0.01" step="0.01" {...register('amount', { required: true, min: 0.01, valueAsNumber: true })} className="mt-1 w-full rounded border px-3 py-2" /></label><label className="block text-sm font-medium">Frequency<select {...register('frequency')} className="mt-1 w-full rounded border px-3 py-2"><option value="MONTHLY">Monthly</option><option value="QUARTERLY">Quarterly</option><option value="ANNUALLY">Annually</option></select></label><label className="block text-sm font-medium">Base currency<select {...register('currency')} className="mt-1 w-full rounded border px-3 py-2"><option>INR</option><option>USD</option></select></label><label className="block text-sm font-medium">Benchmark symbol<input {...register('benchmark')} className="mt-1 w-full rounded border px-3 py-2" /></label><div className="flex gap-2"><button type="submit" disabled={runScenario.isPending} className="rounded bg-gold-600 px-4 py-2 text-white disabled:opacity-50">{runScenario.isPending ? <span className="flex items-center"><Loader2 className="mr-2 animate-spin" />Running…</span> : 'Run recurring scenario'}</button><button type="button" onClick={() => { reset(); runScenario.reset(); }} className="rounded bg-gray-200 px-4 py-2">Reset</button></div></form><LabResultView result={runScenario.data ?? null} isError={runScenario.isError} error={runScenario.error ?? undefined} /></section>;
 }
-
-const RecurringInvestmentPage: React.FC = () => {
-  const { register, handleSubmit, reset } = useForm<FormValues>();
-  const runBacktest = useRunBacktest();
-  const [backtestId, setBacktestId] = React.useState<string | null>(null);
-  const { data: result, isLoading, isError, error } = useBacktest(backtestId ?? "", !!backtestId);
-
-  const onSubmit: SubmitHandler<FormValues> = async (data) => {
-    const payload = {
-      scenarioType: "RECURRENT_INVESTMENT",
-      asset: data.asset,
-      amount: data.amount,
-      frequency: data.frequency,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      currency: data.currency,
-      benchmark: data.benchmark,
-    };
-    const created = await runBacktest.mutateAsync(payload);
-    setBacktestId(created.id);
-  };
-
-  const handleReset = () => {
-    reset();
-    setBacktestId(null);
-  };
-
-  return (
-    <main className="p-4 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Recurring Investment Lab</h1>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1" htmlFor="asset">Asset Symbol</label>
-          <input id="asset" {...register("asset", { required: true })} className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-champagne-500" placeholder="e.g., AAPL" />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1" htmlFor="startDate">Start Date</label>
-            <input id="startDate" type="date" {...register("startDate", { required: true })} className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-champagne-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1" htmlFor="endDate">End Date</label>
-            <input id="endDate" type="date" {...register("endDate", { required: true })} className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-champagne-500" />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1" htmlFor="amount">Recurring Amount</label>
-          <input id="amount" type="number" step="0.01" {...register("amount", { required: true, valueAsNumber: true })} className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-champagne-500" placeholder="e.g., 500" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1" htmlFor="frequency">Frequency</label>
-          <select id="frequency" {...register("frequency", { required: true })} className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-champagne-500">
-            <option value="monthly">Monthly</option>
-            <option value="quarterly">Quarterly</option>
-            <option value="annually">Annually</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1" htmlFor="currency">Currency (optional)</label>
-          <input id="currency" {...register("currency")} className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-champagne-500" placeholder="e.g., USD" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1" htmlFor="benchmark">Benchmark (optional)</label>
-          <input id="benchmark" {...register("benchmark")} className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-champagne-500" placeholder="e.g., S&P 500" />
-        </div>
-        <div className="flex space-x-2">
-          <button type="submit" disabled={runBacktest.isLoading} className="px-4 py-2 bg-champagne-600 text-white rounded hover:bg-champagne-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-champagne-500">
-            {runBacktest.isLoading ? (<span className="flex items-center"><Loader2 className="animate-spin mr-2"/>Running...</span>) : "Run Simulation"}
-          </button>
-          <button type="button" onClick={handleReset} className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">Reset</button>
-        </div>
-      </form>
-      {backtestId && (
-        <section className="mt-8">
-          <h2 className="text-xl font-semibold mb-2">Result</h2>
-          <LabResultView result={result} isLoading={isLoading} isError={isError} error={error} />
-        </section>
-      )}
-    </main>
-  );
-};
-
-export default RecurringInvestmentPage;

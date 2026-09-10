@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - name: TypeScript, API, frontend contract, database, and financial tests
+        env:
+          JWT_SECRET: ci-only-secret-with-at-least-forty-eight-characters-000001
+          JWT_ISSUER: finsight-api
+          JWT_AUDIENCE: finsight-web
+        run: npm run test:ci
+      - name: Production builds
+        run: npm run build

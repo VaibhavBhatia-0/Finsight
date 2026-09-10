@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { WatchlistRepository } from '../repositories/watchlist.repository';
 import { MarketDataService } from '../services/marketData.service';
 import { sendSuccess } from '../utils/response';
+import { AppError } from '../middleware/errorHandler';
 
 export class WatchlistController {
   static async getWatchlists(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -13,8 +14,8 @@ export class WatchlistController {
         // Create a default watchlist
         const defaultWl = await WatchlistRepository.create(userId, 'Main Watchlist');
         // Add sample stocks
-        await WatchlistRepository.addItem(defaultWl.id, 1); // RELIANCE
-        await WatchlistRepository.addItem(defaultWl.id, 5); // NVDA
+        await WatchlistRepository.addItem(defaultWl.id, 1, userId); // RELIANCE
+        await WatchlistRepository.addItem(defaultWl.id, 5, userId); // NVDA
         watchlists = [defaultWl];
       }
 
@@ -58,7 +59,8 @@ export class WatchlistController {
     try {
       const { id } = req.params;
       const { stockId } = req.body;
-      await WatchlistRepository.addItem(id, stockId);
+      const owned = await WatchlistRepository.addItem(id, stockId, req.user!.id);
+      if (!owned) throw new AppError('Watchlist not found', 404, 'WATCHLIST_NOT_FOUND');
       sendSuccess(res, { added: true, watchlistId: id, stockId }, 200, 'Live');
     } catch (error) {
       next(error);
@@ -68,7 +70,8 @@ export class WatchlistController {
   static async removeItem(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id, stockId } = req.params;
-      await WatchlistRepository.removeItem(id, stockId);
+      const owned = await WatchlistRepository.removeItem(id, stockId, req.user!.id);
+      if (!owned) throw new AppError('Watchlist not found', 404, 'WATCHLIST_NOT_FOUND');
       sendSuccess(res, { removed: true, watchlistId: id, stockId }, 200, 'Live');
     } catch (error) {
       next(error);
@@ -86,4 +89,3 @@ export class WatchlistController {
     }
   }
 }
-

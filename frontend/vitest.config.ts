@@ -6,11 +6,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
-    environment: 'jsdom',
+    environment: 'node',
     setupFiles: './src/__tests__/setup.ts',
-    coverage: {
-      provider: 'c8',
-      reporter: ['text', 'json', 'html']
-    }
   }
 });

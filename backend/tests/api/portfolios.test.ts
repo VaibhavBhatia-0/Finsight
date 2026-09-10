@@ -8,6 +8,7 @@ describe('Portfolios & Watchlists API Integration Tests', () => {
   let server: http.Server;
   let baseUrl: string;
   let authToken = '';
+  let watchlistId = '';
 
   beforeAll(async () => {
     await runMigrations();
@@ -53,6 +54,7 @@ describe('Portfolios & Watchlists API Integration Tests', () => {
     expect(data.success).toBe(true);
     expect(data.data.length).toBeGreaterThan(0);
     expect(data.data[0].items.length).toBeGreaterThan(0);
+    watchlistId = data.data[0].id;
   });
 
   it('2. POST /api/v1/portfolios creates portfolio with default deposit', async () => {
@@ -148,5 +150,51 @@ describe('Portfolios & Watchlists API Integration Tests', () => {
     expect(data.data.risk.sharpeRatio).toBeDefined();
     expect(data.data.risk.volatility).toBeDefined();
   });
-});
 
+  it('6. prevents another authenticated user from mutating a watchlist', async () => {
+    const register = await fetch(`${baseUrl}/api/v1/auth/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: `watchlist_intruder_${Date.now()}@example.com`, password: 'Password123!', name: 'Other User', baseCurrency: 'INR' }),
+    });
+    const otherToken = (await register.json()).data.token;
+    const add = await fetch(`${baseUrl}/api/v1/watchlists/${watchlistId}/items`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${otherToken}` }, body: JSON.stringify({ stockId: 2 }),
+    });
+    const remove = await fetch(`${baseUrl}/api/v1/watchlists/${watchlistId}/items/1`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${otherToken}` },
+    });
+    expect(add.status).toBe(404);
+    expect((await add.json()).error.code).toBe('WATCHLIST_NOT_FOUND');
+    expect(remove.status).toBe(404);
+  });
+
+  it('7. rejects mismatched trade amounts and oversells without recording them', async () => {
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` };
+    const mismatch = await fetch(`${baseUrl}/api/v1/portfolios/${portfolioId}/transactions`, {
+      method: 'POST', headers, body: JSON.stringify({ stockId: 1, transactionType: 'BUY', transactionDate: '2024-07-01', quantity: 1, price: 100, amount: 99, currency: 'INR' }),
+    });
+    const oversell = await fetch(`${baseUrl}/api/v1/portfolios/${portfolioId}/transactions`, {
+      method: 'POST', headers, body: JSON.stringify({ stockId: 1, transactionType: 'SELL', transactionDate: '2024-07-02', quantity: 11, price: 3000, amount: 33000, currency: 'INR' }),
+    });
+    expect(mismatch.status).toBe(400);
+    expect((await mismatch.json()).error.code).toBe('AMOUNT_MISMATCH');
+    expect(oversell.status).toBe(409);
+    expect((await oversell.json()).error.code).toBe('INSUFFICIENT_HOLDINGS');
+    const transactions = await fetch(`${baseUrl}/api/v1/portfolios/${portfolioId}/transactions`, { headers: { Authorization: `Bearer ${authToken}` } });
+    const rows = (await transactions.json()).data;
+    expect(rows.filter((row: any) => row.transaction_type === 'SELL')).toHaveLength(0);
+  });
+
+  it('8. preserves historical FX in base-currency cost basis', async () => {
+    const response = await fetch(`${baseUrl}/api/v1/portfolios/${portfolioId}/transactions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ stockId: 6, transactionType: 'BUY', transactionDate: '2024-01-15', quantity: 1, price: 100, amount: 100, currency: 'USD', fxRate: 80 }),
+    });
+    const data = await response.json();
+    expect(response.status).toBe(201);
+    const holding = data.data.valuation.holdings.find((row: any) => row.symbol === 'AAPL');
+    expect(holding.averageCost).toBe(8000);
+    expect(holding.costBasis).toBe(8000);
+    expect(data.data.valuation.summary.cashBalance).toBe(62700);
+  });
+});

@@ -8,7 +8,7 @@ export class MarketController {
   static async getOverview(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const overview = await MarketDataService.getMarketOverview();
-      sendSuccess(res, overview, 200, 'Delayed');
+      sendSuccess(res, overview, 200, 'Synthetic', { source: 'FINSIGHT_DEVELOPMENT_FIXTURE', degraded: true });
     } catch (error) {
       next(error);
     }
@@ -36,7 +36,7 @@ export class MarketController {
         })
       );
 
-      sendSuccess(res, stocksWithQuotes, 200, 'Delayed');
+      sendSuccess(res, stocksWithQuotes, 200, 'Synthetic', { source: 'FINSIGHT_DEVELOPMENT_FIXTURE', degraded: true });
     } catch (error) {
       next(error);
     }
@@ -45,7 +45,7 @@ export class MarketController {
   static async getStockDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
-      const stock = await StockRepository.findById(id);
+      const stock = /^\d+$/.test(id) ? await StockRepository.findById(id) : await StockRepository.findBySymbol(id);
       if (!stock) {
         sendError(res, 404, 'STOCK_NOT_FOUND', `Stock with ID ${id} not found`);
         return;
@@ -62,7 +62,7 @@ export class MarketController {
         fundamentals,
         dividends,
         corporateActions,
-      }, 200, quote.freshness);
+      }, 200, quote.freshness, { source: 'FINSIGHT_DEVELOPMENT_FIXTURE', degraded: true });
     } catch (error) {
       next(error);
     }
@@ -86,7 +86,7 @@ export class MarketController {
         endDate as string
       );
 
-      sendSuccess(res, prices, 200, 'Historical');
+      sendSuccess(res, prices, 200, 'Synthetic', { source: 'FINSIGHT_DEVELOPMENT_FIXTURE', degraded: true });
     } catch (error) {
       next(error);
     }
@@ -134,7 +134,7 @@ export class MarketController {
         limit: limit ? parseInt(limit as string, 10) : 20,
       });
 
-      sendSuccess(res, results, 200, 'Delayed');
+      sendSuccess(res, results, 200, 'Synthetic', { source: 'FINSIGHT_DEVELOPMENT_FIXTURE', degraded: true });
     } catch (error) {
       next(error);
     }
@@ -155,4 +155,3 @@ export class MarketController {
     }
   }
 }
-

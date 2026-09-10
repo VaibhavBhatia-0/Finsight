@@ -1,6 +1,22 @@
 import { ExchangeRateRepository } from '../repositories/exchangeRate.repository';
+import { AppError } from '../middleware/errorHandler';
 
 export class FXService {
+  private static syntheticRate(base: string, quote: string): number {
+    if (process.env.NODE_ENV === 'production') {
+      throw new AppError('No historical FX observation is available', 503, 'FX_DATA_UNAVAILABLE');
+    }
+    return this.getEstimatedRate(base, quote);
+  }
+
+  public static async getRateInfo(baseCurrency: string, quoteCurrency: string, date: string) {
+    const base = baseCurrency.toUpperCase();
+    const quote = quoteCurrency.toUpperCase();
+    const observation = await ExchangeRateRepository.getRateObservation(base, quote, date);
+    if (observation) return observation;
+    return { rate: this.syntheticRate(base, quote), freshness: 'Synthetic', source: 'FINSIGHT_DEVELOPMENT_FIXTURE' };
+  }
+
   /**
    * Resolves exchange rate on or before target date.
    */
@@ -8,17 +24,7 @@ export class FXService {
     const base = baseCurrency.toUpperCase();
     const quote = quoteCurrency.toUpperCase();
 
-    if (base === quote) return 1.0;
-
-    let rate = await ExchangeRateRepository.getRate(base, quote, date);
-    if (rate !== null) {
-      return rate;
-    }
-
-    // Default dynamic fallback if not found in database: synthetic realistic rate
-    const fallbackRate = this.getEstimatedRate(base, quote);
-    await ExchangeRateRepository.saveRate(base, quote, date, fallbackRate, 'FINSIGHT_SYNTHETIC', 'Historical');
-    return fallbackRate;
+    return (await this.getRateInfo(base, quote, date)).rate;
   }
 
   /**
@@ -37,14 +43,11 @@ export class FXService {
       return latest;
     }
 
-    const estRate = this.getEstimatedRate(base, quote);
-    const today = new Date().toISOString().slice(0, 10);
-    await ExchangeRateRepository.saveRate(base, quote, today, estRate, 'FINSIGHT_SYNTHETIC', 'End-of-day');
-
     return {
-      rate: estRate,
-      freshness: 'End-of-day' as const,
+      rate: this.syntheticRate(base, quote),
+      freshness: 'Synthetic' as const,
       observed_at: new Date().toISOString(),
+      source: 'FINSIGHT_DEVELOPMENT_FIXTURE',
     };
   }
 
@@ -65,11 +68,11 @@ export class FXService {
     }
 
     if (date) {
-      const rate = await this.getRate(src, tgt, date);
+      const info = await this.getRateInfo(src, tgt, date);
       return {
-        convertedAmount: round2(amount * rate),
-        rate,
-        freshness: 'Historical',
+        convertedAmount: round2(amount * info.rate),
+        rate: info.rate,
+        freshness: info.freshness,
       };
     } else {
       const latest = await this.getLatestRate(src, tgt);
@@ -104,4 +107,3 @@ function round2(val: number): number {
 function round6(val: number): number {
   return Math.round(val * 1000000) / 1000000;
 }
-

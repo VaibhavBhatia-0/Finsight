@@ -5,14 +5,18 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 import { createApp } from './app';
 import { runMigrations } from './database/migrate';
 import { runSeeds } from './database/seed';
+import { assertJwtConfiguration } from './utils/jwt';
 
 const PORT = process.env.PORT || 5000;
 
 async function startServer() {
   try {
+    assertJwtConfiguration();
     console.log('[FinSight] Initializing database...');
     await runMigrations();
-    await runSeeds();
+    if (process.env.RUN_SEEDS_ON_STARTUP === 'true' && process.env.NODE_ENV !== 'production') {
+      await runSeeds();
+    }
 
     const app = createApp();
     app.listen(PORT, () => {
@@ -28,4 +32,3 @@ async function startServer() {
 if (require.main === module) {
   startServer();
 }
-

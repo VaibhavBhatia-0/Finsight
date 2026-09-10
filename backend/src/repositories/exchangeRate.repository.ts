@@ -12,35 +12,26 @@ export interface ExchangeRateRow {
 }
 
 export class ExchangeRateRepository {
-  static async getRate(base: string, quote: string, date: string): Promise<number | null> {
-    if (base === quote) return 1.0;
-
-    // Look for direct pair on or immediately before target date
-    const directRes = await db.query<{ rate: string }>(`
-      SELECT rate FROM exchange_rates
+  static async getRateObservation(base: string, quote: string, date: string): Promise<{ rate: number; freshness: string; source: string | null } | null> {
+    if (base === quote) return { rate: 1, freshness: 'Live', source: 'IDENTITY' };
+    const direct = await db.query<{ rate: string; freshness: string; source: string | null }>(`
+      SELECT rate, freshness, source FROM exchange_rates
       WHERE base_currency = $1 AND quote_currency = $2 AND rate_date <= $3
-      ORDER BY rate_date DESC
-      LIMIT 1;
+      ORDER BY rate_date DESC LIMIT 1;
     `, [base, quote, date]);
-
-    if (directRes.rows.length > 0) {
-      return parseFloat(directRes.rows[0].rate);
-    }
-
-    // Look for inverse pair
-    const inverseRes = await db.query<{ rate: string }>(`
-      SELECT rate FROM exchange_rates
+    if (direct.rows[0]) return { rate: parseFloat(direct.rows[0].rate), freshness: direct.rows[0].source?.startsWith('FINSIGHT_') ? 'Synthetic' : (direct.rows[0].freshness || 'Historical'), source: direct.rows[0].source };
+    const inverse = await db.query<{ rate: string; freshness: string; source: string | null }>(`
+      SELECT rate, freshness, source FROM exchange_rates
       WHERE base_currency = $1 AND quote_currency = $2 AND rate_date <= $3
-      ORDER BY rate_date DESC
-      LIMIT 1;
+      ORDER BY rate_date DESC LIMIT 1;
     `, [quote, base, date]);
+    if (!inverse.rows[0]) return null;
+    const rate = parseFloat(inverse.rows[0].rate);
+    return rate > 0 ? { rate: 1 / rate, freshness: inverse.rows[0].source?.startsWith('FINSIGHT_') ? 'Synthetic' : (inverse.rows[0].freshness || 'Historical'), source: inverse.rows[0].source } : null;
+  }
 
-    if (inverseRes.rows.length > 0) {
-      const invRate = parseFloat(inverseRes.rows[0].rate);
-      return invRate > 0 ? 1.0 / invRate : null;
-    }
-
-    return null;
+  static async getRate(base: string, quote: string, date: string): Promise<number | null> {
+    return (await this.getRateObservation(base, quote, date))?.rate ?? null;
   }
 
   static async getLatestRate(base: string, quote: string): Promise<{ rate: number; freshness: string; observed_at: string } | null> {
@@ -102,4 +93,3 @@ export class ExchangeRateRepository {
     `, [base, quote, date, rate, source, freshness]);
   }
 }
-

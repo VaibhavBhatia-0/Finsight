@@ -4,9 +4,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import DashboardPage from '../pages/DashboardPage';
 import LoginPage from '../pages/auth/LoginPage';
 import RegisterPage from '../pages/auth/RegisterPage';
-import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
-import ResetPasswordPage from '../pages/auth/ResetPasswordPage';
-import VerifyEmailPage from '../pages/auth/VerifyEmailPage';
 import MarketsPage from '../pages/MarketsPage';
 import StockDetailPage from '../pages/StockDetailPage';
 import ScreenerPage from '../pages/ScreenerPage';
@@ -28,12 +25,13 @@ import BacktestingPage from '../pages/BacktestingPage';
 import SettingsPage from '../pages/SettingsPage';
 import ReportsPage from '../pages/ReportsPage';
 import { useAuth } from '../hooks/useAuth';
+import AppLayout from '../layout/AppLayout';
 
 // Guard component for protected routes
-const RequireAuth: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+const RequireAuth: React.FC = () => {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex items-center justify-center h-screen">Loading…</div>;
-  return user ? children : <Navigate to="/login" replace />;
+  return user ? <AppLayout /> : <Navigate to="/login" replace />;
 };
 
 const AppRoutes: React.FC = () => {
@@ -42,71 +40,35 @@ const AppRoutes: React.FC = () => {
       {/* Public routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/markets" element={<MarketsPage />} />
       <Route path="/markets/:symbol" element={<StockDetailPage />} />
       <Route path="/screener" element={<ScreenerPage />} />
 
-      {/* Protected routes */}
-      <Route
-        path="/dashboard"
-        element={
-          <RequireAuth>
-            <DashboardPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/watchlist/*"
-        element={
-          <RequireAuth>
-            <WatchlistPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/portfolios"
-        element={
-          <RequireAuth>
-            <PortfolioListPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/portfolios/:id"
-        element={
-          <RequireAuth>
-            <PortfolioDetailPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/lab/*"
-        element={
-          <RequireAuth>
-            <LabIndexPage />
-          </RequireAuth>
-        }
-      />
-      <Route path="/lab/single-investment" element={<RequireAuth><SingleInvestmentPage /></RequireAuth>} />
-      <Route path="/lab/recurring-investment" element={<RequireAuth><RecurringInvestmentPage /></RequireAuth>} />
-      <Route path="/lab/portfolio-scenario" element={<RequireAuth><PortfolioScenarioPage /></RequireAuth>} />
-      <Route path="/lab/compare" element={<RequireAuth><CompareScenariosPage /></RequireAuth>} />
-      <Route path="/lab/backtest" element={<RequireAuth><LabBacktestPage /></RequireAuth>} />
-      <Route path="/finance/expenses" element={<RequireAuth><FinanceExpensesPage /></RequireAuth>} />
-      <Route path="/finance/budgets" element={<RequireAuth><FinanceBudgetsPage /></RequireAuth>} />
-      <Route path="/finance/savings" element={<RequireAuth><FinanceSavingsPage /></RequireAuth>} />
-      <Route path="/finance/goals" element={<RequireAuth><FinanceGoalsPage /></RequireAuth>} />
-      <Route path="/insights" element={<RequireAuth><InsightsPage /></RequireAuth>} />
-      <Route path="/backtesting" element={<RequireAuth><BacktestingPage /></RequireAuth>} />
-      <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
-      <Route path="/reports" element={<RequireAuth><ReportsPage /></RequireAuth>} />
+      {/* Protected routes share one authenticated application shell. */}
+      <Route element={<RequireAuth />}>
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/watchlist" element={<WatchlistPage />} />
+        <Route path="/portfolios" element={<PortfolioListPage />} />
+        <Route path="/portfolios/:id" element={<PortfolioDetailPage />} />
+        <Route path="/lab" element={<LabIndexPage />} />
+        <Route path="/lab/single-investment" element={<SingleInvestmentPage />} />
+        <Route path="/lab/recurring-investment" element={<RecurringInvestmentPage />} />
+        <Route path="/lab/portfolio-scenario" element={<PortfolioScenarioPage />} />
+        <Route path="/lab/compare" element={<CompareScenariosPage />} />
+        <Route path="/lab/backtest" element={<LabBacktestPage />} />
+        <Route path="/finance/expenses" element={<FinanceExpensesPage />} />
+        <Route path="/finance/budgets" element={<FinanceBudgetsPage />} />
+        <Route path="/finance/savings" element={<FinanceSavingsPage />} />
+        <Route path="/finance/goals" element={<FinanceGoalsPage />} />
+        <Route path="/insights" element={<InsightsPage />} />
+        <Route path="/backtesting" element={<BacktestingPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+      </Route>
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 };
 
-
+export default AppRoutes;

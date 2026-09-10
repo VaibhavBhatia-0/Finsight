@@ -1,8 +1,7 @@
 // src/layout/Sidebar.tsx
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LucideIcon } from 'lucide-react';
-import { Home, BarChart2, List, FolderKanban, Coins, Settings, Layers, CreditCard, Wallet, TrendingUp } from 'lucide-react';
+import { Home, BarChart2, List, FolderKanban, Coins, Settings, CreditCard, Wallet, TrendingUp } from 'lucide-react';
 
 // Simplified navigation config – matches the locked route hierarchy
 const navItems = [
@@ -39,4 +38,3 @@ const Sidebar: React.FC = () => {
 };
 
 export default Sidebar;
-

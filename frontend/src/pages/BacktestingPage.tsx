@@ -1,9 +1,9 @@
 // src/pages/BacktestingPage.tsx
 import React from "react";
-import { useBacktest } from "../hooks/useBacktest";
+import { useBacktests } from "../hooks/useBacktest";
 
 const BacktestingPage: React.FC = () => {
-  const { data, isLoading, error } = useBacktest();
+  const { data, isLoading, error } = useBacktests();
 
   if (isLoading) return <div className="flex items-center justify-center h-screen">Loading…</div>;
   if (error) return <div className="text-red-600" role="alert">Error loading backtest data</div>;

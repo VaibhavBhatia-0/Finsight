@@ -3,12 +3,14 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { errorHandler } from './middleware/errorHandler';
-import { sendSuccess } from './utils/response';
+import { sendError, sendSuccess } from './utils/response';
 import authRoutes from './routes/auth.routes';
 import marketRoutes from './routes/market.routes';
 import watchlistRoutes from './routes/watchlist.routes';
 import portfolioRoutes from './routes/portfolio.routes';
 import scenarioRoutes from './routes/scenario.routes';
+import financeRoutes from './routes/finance.routes';
+import backtestRoutes from './routes/backtest.routes';
 
 export function createApp(): Express {
   const app: Express = express();
@@ -42,6 +44,12 @@ export function createApp(): Express {
   app.use('/api/v1/watchlists', watchlistRoutes);
   app.use('/api/v1/portfolios', portfolioRoutes);
   app.use('/api/v1/scenarios', scenarioRoutes);
+  app.use('/api/v1/finance', financeRoutes);
+  app.use('/api/v1/backtests', backtestRoutes);
+
+  app.use((req: Request, res: Response) => {
+    sendError(res, 404, 'ROUTE_NOT_FOUND', `No API route matches ${req.method} ${req.path}`);
+  });
 
   // Centralized Error Handling Middleware (must be registered last)
   app.use(errorHandler);

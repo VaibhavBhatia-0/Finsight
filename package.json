@@ -16,7 +16,9 @@
     "test:db": "npm run test:db --workspace=backend",
     "test:finance": "npm run test:finance --workspace=backend",
     "typecheck": "npm run typecheck --workspaces",
-    "lint": "npm run lint --workspaces"
+    "lint": "npm run lint --workspaces",
+    "test:ci": "npm run typecheck && npm run test --workspace=backend && npm run test:ci --workspace=frontend && npm run test:python",
+    "test:python": "python -m unittest discover -s analytics/tests -v"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
@@ -25,4 +27,3 @@
     "node": ">=20.0.0"
   }
 }
-

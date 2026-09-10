@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="FinSight financial analysis workspace" />
+    <title>FinSight</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+*** Update File: D:\FINSIGHT\frontend\src\context\AuthContext.tsx
+@@
+-import React, { createContext, useState, useEffect, ReactNode } from 'react';
++import { createContext, useState, useEffect, ReactNode } from 'react';
+@@
+-        .then((res) => setUser(res.data.data))
++        .then((res) => setUser(res.data.user))
+@@
+-    const { token, user } = res.data.data;
++    const { token, user } = res.data;
+*** Update File: D:\FINSIGHT\frontend\src\context\ThemeContext.tsx
+@@
+-import React, { createContext, useEffect, useState, ReactNode } from 'react';
++import { createContext, useEffect, useState, ReactNode } from 'react';
+*** Update File: D:\FINSIGHT\frontend\src\components\FreshnessBadge.tsx
+@@
+-import { Tooltip } from 'react-tooltip'; // assuming a lightweight tooltip library, otherwise fallback to title
+ 
+-type Freshness = 'Live' | 'Delayed' | 'End-of-day' | 'Historical';
++type Freshness = 'Live' | 'Delayed' | 'End-of-day' | 'Historical' | 'Static' | 'Synthetic';
+@@
+   Historical: 'bg-gray-500',
++  Static: 'bg-slate-500',
++  Synthetic: 'bg-orange-600',
+@@
+ };
++
++export default FreshnessBadge;

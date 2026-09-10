@@ -1,148 +1,33 @@
-// src/pages/DashboardPage.tsx
-import React from "react";
-import { useUserPreferences } from "../context/UserPreferencesContext";
-import { useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import api from '../api/client';
+import { Spinner } from '../components/Spinner';
+import { usePortfolios } from '../hooks/usePortfolios';
+import { useWatchlist } from '../hooks/useWatchlist';
+import { useUserPreferences } from '../context/UserPreferencesContext';
 
-// Placeholder data fetching hooks (should be replaced with real hooks)
-const usePortfolioSummary = () => ({ data: { totalValue: 123456, change: 2.5 }, isLoading: false, isError: false });
-const useMarketIndices = () => ({ data: [{ name: "S&P 500", value: 4500 }], isLoading: false, isError: false });
-const useWatchlist = () => ({ data: [{ symbol: "AAPL", price: 150 }], isLoading: false, isError: false });
+interface Overview { indices: Array<{ code: string; name: string; currency: string; price: number; changePercent: number }> }
+interface FinanceSummary { overview: { totalIncome: number; totalExpense: number; netSavings: number; estimatedInvestableSurplus: number } }
 
-const Section = ({ id, title, children }: { id: string; title: string; children: React.ReactNode }) => {
-  const { setVisibility, preferences } = useUserPreferences();
-  const visible = preferences.visible[id];
-
-  if (!visible) return null;
-
-  return (
-    <section className="mb-8" data-section-id={id}>
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="text-xl font-semibold">{title}</h2>
-        <button
-          onClick={() => setVisibility(id, false)}
-          className="text-sm text-gray-500 hover:text-gray-700"
-          aria-label={`Hide ${title}`}
-        >
-          Hide
-        </button>
-      </div>
-      {children}
-    </section>
-  );
-};
-
-const DashboardPage: React.FC = () => {
-  const { preferences, setOrder, setVisibility } = useUserPreferences();
-  const navigate = useNavigate();
-
-  const summary = usePortfolioSummary();
-  const indices = useMarketIndices();
-  const watchlist = useWatchlist();
-
-  const handleAddSection = (sectionId: string) => {
-    setVisibility(sectionId, true);
+export default function DashboardPage() {
+  const portfolios = usePortfolios();
+  const watchlists = useWatchlist();
+  const markets = useQuery({ queryKey: ['markets-overview'], queryFn: async () => (await api.get<Overview>('/api/v1/markets/overview')).data });
+  const finance = useQuery({ queryKey: ['finance-summary'], queryFn: async () => (await api.get<FinanceSummary>('/api/v1/finance/summary')).data });
+  const { preferences, setVisibility } = useUserPreferences();
+  if ([portfolios, watchlists, markets, finance].some(query => query.isPending)) return <Spinner />;
+  const error = portfolios.error || watchlists.error || markets.error || finance.error;
+  if (error) return <p className="p-4 text-red-600">{error.message}</p>;
+  const sections: Record<string, React.ReactNode> = {
+    summary: <Section title="Portfolio summary"><div className="grid gap-3 sm:grid-cols-3"><Metric label="Combined value" value={format(portfolios.data?.reduce((sum, item) => sum + item.summary.totalValue, 0) ?? 0, 'INR')} /><Metric label="Income" value={format(finance.data?.overview.totalIncome ?? 0, 'INR')} /><Metric label="Investable surplus" value={format(finance.data?.overview.estimatedInvestableSurplus ?? 0, 'INR')} /></div></Section>,
+    indices: <Section title="Market indices"><p className="mb-2 text-xs text-orange-700">Synthetic development data</p><div className="grid gap-3 sm:grid-cols-2">{markets.data?.indices.map(index => <Metric key={index.code} label={index.name} value={`${index.currency} ${index.price.toLocaleString()} (${index.changePercent.toFixed(2)}%)`} />)}</div></Section>,
+    watchlist: <Section title="Watchlist snapshot"><ul className="divide-y">{watchlists.data?.flatMap(list => list.items).slice(0, 5).map(item => <li key={item.stock_id} className="py-2"><Link className="font-mono text-gold-700" to={`/markets/${item.symbol}`}>{item.symbol}</Link> <span className="ml-3">{item.company_name}</span></li>)}</ul></Section>,
+    labLaunch: <Section title="FinSight Lab"><div className="flex flex-wrap gap-2"><LinkButton to="/lab/single-investment">Single investment</LinkButton><LinkButton to="/lab/recurring-investment">Recurring investment</LinkButton><LinkButton to="/lab/portfolio-scenario">Portfolio scenario</LinkButton><LinkButton to="/lab/backtest">Backtest strategy</LinkButton></div></Section>,
   };
+  return <section className="mx-auto max-w-5xl p-4"><h1 className="mb-6 text-3xl font-bold">Dashboard</h1>{preferences.order.filter(id => preferences.visible[id]).map(id => <div key={id} className="relative"><button onClick={() => setVisibility(id, false)} className="absolute right-0 top-0 text-xs text-gray-500">Hide</button>{sections[id]}</div>)}<div className="flex gap-2">{Object.entries(preferences.visible).filter(([,visible]) => !visible).map(([id]) => <button key={id} onClick={() => setVisibility(id,true)} className="rounded border px-3 py-1 text-sm">Show {id}</button>)}</div></section>;
+}
 
-  // Simple order rendering based on preferences.order
-  const renderSection = (sectionId: string) => {
-    switch (sectionId) {
-      case "summary":
-        return (
-          <Section id="summary" title="Portfolio Summary">
-            {summary.isLoading ? (
-              <div className="flex items-center"><Loader2 className="mr-2 animate-spin"/>Loading...</div>
-            ) : summary.isError ? (
-              <p className="text-red-600">Failed to load summary</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <div>Total Value: ${summary.data.totalValue.toLocaleString()}</div>
-                <div>Change: {summary.data.change}%</div>
-              </div>
-            )}
-          </Section>
-        );
-      case "indices":
-        return (
-          <Section id="indices" title="Market Indices">
-            {indices.isLoading ? (
-              <div className="flex items-center"><Loader2 className="mr-2 animate-spin"/>Loading...</div>
-            ) : indices.isError ? (
-              <p className="text-red-600">Failed to load indices</p>
-            ) : (
-              <ul className="space-y-1">
-                {indices.data.map((i) => (
-                  <li key={i.name} className="flex justify-between">
-                    <span>{i.name}</span>
-                    <span>{i.value}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
-        );
-      case "watchlist":
-        return (
-          <Section id="watchlist" title="Watchlist Snapshot">
-            {watchlist.isLoading ? (
-              <div className="flex items-center"><Loader2 className="mr-2 animate-spin"/>Loading...</div>
-            ) : watchlist.isError ? (
-              <p className="text-red-600">Failed to load watchlist</p>
-            ) : (
-              <ul className="space-y-1">
-                {watchlist.data.map((w) => (
-                  <li key={w.symbol} className="flex justify-between cursor-pointer" onClick={() => navigate(`/markets/${w.symbol}`)}>
-                    <span>{w.symbol}</span>
-                    <span>${w.price}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
-        );
-      case "labLaunch":
-        return (
-          <Section id="labLaunch" title="FinSight Lab Quick Launch">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button onClick={() => navigate("/lab/single-investment")} className="p-4 border rounded hover:bg-gray-50">Single Investment</button>
-              <button onClick={() => navigate("/lab/recurring-investment")} className="p-4 border rounded hover:bg-gray-50">Recurring Investment</button>
-              <button onClick={() => navigate("/lab/portfolio-scenario")} className="p-4 border rounded hover:bg-gray-50">Portfolio Scenario</button>
-              <button onClick={() => navigate("/lab/compare")} className="p-4 border rounded hover:bg-gray-50">Compare Scenarios</button>
-              <button onClick={() => navigate("/lab/backtest")} className="p-4 border rounded hover:bg-gray-50">Backtest Lab</button>
-            </div>
-          </Section>
-        );
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <main className="p-4 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
-
-      {/* Render sections in stored order */}
-      {preferences.order.map(renderSection)}
-
-      {/* Show add-section buttons for hidden sections */}
-      <div className="mt-4">
-        <h2 className="text-lg font-medium mb-2">Add Sections</h2>
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(preferences.visible)
-            .filter(([, v]) => !v)
-            .map(([id]) => (
-              <button
-                key={id}
-                onClick={() => handleAddSection(id)}
-                className="px-3 py-1 bg-champagne-600 text-white rounded hover:bg-champagne-700"
-              >
-                Show {id.charAt(0).toUpperCase() + id.slice(1)}
-              </button>
-            ))}
-        </div>
-      </div>
-    </main>
-  );
-};
-
-export default DashboardPage;
+function Section({title,children}:{title:string;children:React.ReactNode}) { return <section className="mb-8"><h2 className="mb-3 text-xl font-semibold">{title}</h2>{children}</section>; }
+function Metric({label,value}:{label:string;value:string}) { return <div className="rounded border p-3"><p className="text-sm text-gray-500">{label}</p><p className="font-semibold">{value}</p></div>; }
+function LinkButton({to,children}:{to:string;children:React.ReactNode}) { return <Link to={to} className="rounded border border-gold-600 px-3 py-2 text-gold-700">{children}</Link>; }
+function format(value:number,currency:string) { return new Intl.NumberFormat('en-IN',{style:'currency',currency,maximumFractionDigits:2}).format(value); }

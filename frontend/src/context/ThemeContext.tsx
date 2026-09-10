@@ -1,5 +1,5 @@
 // src/context/ThemeContext.tsx
-import React, { createContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useEffect, useState, ReactNode } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -37,4 +37,3 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const value: ThemeContextType = { theme, toggleTheme };
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };
-

@@ -42,9 +42,8 @@ ON CONFLICT (symbol, exchange_id) DO NOTHING;
 
 -- INITIAL FX RATES (USD/INR historical sample and current reference)
 INSERT INTO exchange_rates (base_currency, quote_currency, rate_date, rate, source, observed_at, freshness) VALUES
-('USD', 'INR', '2023-01-02', 82.750000000000, 'RBI_REFERENCE', '2023-01-02T13:00:00Z', 'Historical'),
-('USD', 'INR', '2024-01-02', 83.300000000000, 'RBI_REFERENCE', '2024-01-02T13:00:00Z', 'Historical'),
-('USD', 'INR', '2025-01-02', 85.800000000000, 'RBI_REFERENCE', '2025-01-02T13:00:00Z', 'Historical'),
-('USD', 'INR', '2026-09-08', 88.250000000000, 'RBI_REFERENCE', '2026-09-08T13:00:00Z', 'End-of-day')
+('USD', 'INR', '2023-01-02', 82.750000000000, 'FINSIGHT_DEVELOPMENT_FIXTURE', '2023-01-02T13:00:00Z', 'Synthetic'),
+('USD', 'INR', '2024-01-02', 83.300000000000, 'FINSIGHT_DEVELOPMENT_FIXTURE', '2024-01-02T13:00:00Z', 'Synthetic'),
+('USD', 'INR', '2025-01-02', 85.800000000000, 'FINSIGHT_DEVELOPMENT_FIXTURE', '2025-01-02T13:00:00Z', 'Synthetic'),
+('USD', 'INR', '2026-09-08', 88.250000000000, 'FINSIGHT_DEVELOPMENT_FIXTURE', '2026-09-08T13:00:00Z', 'Synthetic')
 ON CONFLICT (base_currency, quote_currency, rate_date) DO NOTHING;
-

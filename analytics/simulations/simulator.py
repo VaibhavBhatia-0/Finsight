@@ -1,263 +1,276 @@
-"""
-FinSight Analytics - Investment Simulation Engine (FinSight Lab)
-Handles Single Investment, Recurring Investment (DCA), and Portfolio Scenarios.
-Performs deterministic financial math, corporate actions, dividends, dynamic FX separation,
-fees, estimated educational taxes, risk metrics, and benchmark comparisons.
-"""
+"""FinSight Lab scenario engine. This is intentionally separate from backtesting."""
 
-import sys
+import calendar
 import json
-from datetime import datetime
-from typing import List, Dict, Any, Optional
+import os
+import sys
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional
 
 try:
     from analytics.common.metrics import (
-        calculate_returns, calculate_cagr, calculate_xirr,
-        calculate_volatility, calculate_sharpe_ratio, calculate_max_drawdown, calculate_beta
+        calculate_beta_dated,
+        calculate_cagr,
+        calculate_max_drawdown,
+        calculate_sharpe_ratio,
+        calculate_volatility,
+        calculate_xirr,
     )
 except ImportError:
-    # Direct execution support
-    import os
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
     from analytics.common.metrics import (
-        calculate_returns, calculate_cagr, calculate_xirr,
-        calculate_volatility, calculate_sharpe_ratio, calculate_max_drawdown, calculate_beta
+        calculate_beta_dated,
+        calculate_cagr,
+        calculate_max_drawdown,
+        calculate_sharpe_ratio,
+        calculate_volatility,
+        calculate_xirr,
     )
 
-def resolve_price_on_or_after(prices: List[Dict[str, Any]], target_date: str) -> Optional[Dict[str, Any]]:
-    """Find the first trading day on or after target_date."""
-    sorted_p = sorted(prices, key=lambda x: x["date"])
-    for p in sorted_p:
-        if p["date"] >= target_date:
-            return p
-    return sorted_p[-1] if sorted_p else None
 
-def resolve_price_on_or_before(prices: List[Dict[str, Any]], target_date: str) -> Optional[Dict[str, Any]]:
-    """Find the latest trading day on or before target_date."""
-    sorted_p = sorted(prices, key=lambda x: x["date"], reverse=True)
-    for p in sorted_p:
-        if p["date"] <= target_date:
-            return p
-    return sorted_p[0] if sorted_p else None
+def _round(value: float) -> float:
+    return round(value, 8)
 
-def resolve_fx_rate(fx_rates: List[Dict[str, Any]], target_date: str, base_curr: str, quote_curr: str) -> float:
-    """Find applicable FX rate for base_curr -> quote_curr."""
-    if base_curr == quote_curr:
+
+def _prices(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return sorted(rows, key=lambda row: row["date"])
+
+
+def price_on_or_after(rows: List[Dict[str, Any]], target: str) -> Optional[Dict[str, Any]]:
+    return next((row for row in _prices(rows) if row["date"] >= target), None)
+
+
+def price_on_or_before(rows: List[Dict[str, Any]], target: str) -> Optional[Dict[str, Any]]:
+    return next((row for row in reversed(_prices(rows)) if row["date"] <= target), None)
+
+
+def fx_rate(rows: List[Dict[str, Any]], target: str, asset_currency: str, base_currency: str) -> float:
+    if asset_currency == base_currency:
         return 1.0
-
-    # Look for direct match or inverse match
-    sorted_fx = sorted(fx_rates, key=lambda x: x.get("date", ""), reverse=True)
-    for fx in sorted_fx:
-        d = fx.get("date", "")
-        if d <= target_date:
-            b = fx.get("base_currency", "")
-            q = fx.get("quote_currency", "")
-            rate = float(fx.get("rate", 1.0))
-            if b == base_curr and q == quote_curr:
-                return rate
-            elif b == quote_curr and q == base_curr and rate > 0:
-                return 1.0 / rate
-
-    # Fallback to earliest available or 1.0
-    if sorted_fx:
-        b = sorted_fx[-1].get("base_currency", "")
-        q = sorted_fx[-1].get("quote_currency", "")
-        rate = float(sorted_fx[-1].get("rate", 1.0))
-        if b == base_curr and q == quote_curr:
+    eligible = sorted((row for row in rows if row.get("date", "") <= target), key=lambda row: row["date"], reverse=True)
+    if not eligible:
+        eligible = sorted(rows, key=lambda row: row.get("date", ""))
+    for row in eligible:
+        source, quote, rate = row.get("base_currency"), row.get("quote_currency"), float(row.get("rate", 0))
+        if rate <= 0:
+            continue
+        if source == asset_currency and quote == base_currency:
             return rate
-        elif b == quote_curr and q == base_curr and rate > 0:
-            return 1.0 / rate
+        if source == base_currency and quote == asset_currency:
+            return 1 / rate
+    raise ValueError(f"No FX rate for {asset_currency}/{base_currency} on or before {target}")
 
-    return 1.0
 
-def simulate_single_investment(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Single lump sum investment simulation."""
-    initial_amount = float(payload.get("initial_amount", 10000.0))
-    base_currency = payload.get("base_currency", "INR")
-    asset_currency = payload.get("asset_currency", "USD")
-    start_date = payload.get("start_date")
-    end_date = payload.get("end_date")
-    prices = payload.get("price_history", [])
-    fx_rates = payload.get("exchange_rates", [])
-    dividends = payload.get("dividends", [])
-    corp_actions = payload.get("corporate_actions", [])
-    benchmark_prices = payload.get("benchmark_price_history", [])
-    fee_rate = float(payload.get("fee_rate", 0.001))  # 0.1% default
-    tax_rate = float(payload.get("tax_rate", 0.125))  # 12.5% default LTCG
+def split_events(rows: List[Dict[str, Any]], start: str, end: str) -> List[Dict[str, Any]]:
+    return sorted([
+        row for row in rows
+        if start < row.get("action_date", "") <= end
+        and str(row.get("action_type", "SPLIT")).upper() in {"SPLIT", "BONUS"}
+        and float(row.get("ratio", 0)) > 0
+    ], key=lambda row: row["action_date"])
 
-    if not prices or not start_date or not end_date:
-        raise ValueError("Missing required price data or date range for simulation.")
 
-    buy_bar = resolve_price_on_or_after(prices, start_date)
-    sell_bar = resolve_price_on_or_before(prices, end_date)
+def adjusted_shares(initial_shares: float, splits: List[Dict[str, Any]], start: str, target: str) -> float:
+    shares = initial_shares
+    for event in splits:
+        if start < event["action_date"] <= target:
+            shares *= float(event["ratio"])
+    return shares
 
-    if not buy_bar or not sell_bar:
-        raise ValueError(f"Unable to resolve trading days between {start_date} and {end_date}.")
 
-    actual_buy_date = buy_bar["date"]
-    actual_sell_date = sell_bar["date"]
-    buy_price = float(buy_bar["close"])
-    sell_price = float(sell_bar["close"])
+def dividends_for_lots(lots: List[Dict[str, Any]], dividends: List[Dict[str, Any]], splits: List[Dict[str, Any]], end: str, fx_rows: List[Dict[str, Any]], asset_currency: str, base_currency: str):
+    total = 0.0
+    dated_flows: List[Dict[str, Any]] = []
+    for dividend in sorted(dividends, key=lambda row: row.get("ex_date", "")):
+        event_date = dividend.get("ex_date", "")
+        if not event_date or event_date > end:
+            continue
+        shares = sum(adjusted_shares(lot["shares"], splits, lot["date"], event_date) for lot in lots if lot["date"] < event_date)
+        amount = shares * float(dividend.get("amount", 0)) * fx_rate(fx_rows, event_date, asset_currency, base_currency)
+        if amount:
+            total += amount
+            dated_flows.append({"date": event_date, "amount": amount})
+    return total, dated_flows
 
-    # FX conversion on buy date (e.g. INR to USD: 1 / (USD/INR))
-    # fx_rate represents (Asset Currency / Base Currency) or standard pair (USD/INR)
-    # If base is INR and asset is USD, rate USD/INR = 83.0 -> 1 INR = 1/83 USD
-    usd_inr_buy = resolve_fx_rate(fx_rates, actual_buy_date, "USD", "INR")
-    usd_inr_sell = resolve_fx_rate(fx_rates, actual_sell_date, "USD", "INR")
 
-    if base_currency == "INR" and asset_currency == "USD":
-        start_fx_to_asset = 1.0 / usd_inr_buy if usd_inr_buy > 0 else 1.0
-        exit_fx_to_base = usd_inr_sell
-    elif base_currency == "USD" and asset_currency == "INR":
-        start_fx_to_asset = usd_inr_buy
-        exit_fx_to_base = 1.0 / usd_inr_sell if usd_inr_sell > 0 else 1.0
-    else:
-        start_fx_to_asset = 1.0
-        exit_fx_to_base = 1.0
-
-    # Buying power in asset currency
-    invest_in_asset_curr = initial_amount * start_fx_to_asset
-    shares = invest_in_asset_curr / buy_price
-
-    # Apply corporate actions (Splits / Bonuses)
-    adjusted_shares = shares
-    for ca in sorted(corp_actions, key=lambda x: x.get("action_date", "")):
-        ca_date = ca.get("action_date", "")
-        if actual_buy_date < ca_date <= actual_sell_date:
-            ratio = float(ca.get("ratio", 1.0))
-            if ratio > 0:
-                adjusted_shares *= ratio
-
-    # Accumulate dividends
-    total_dividend_asset_curr = 0.0
-    for div in sorted(dividends, key=lambda x: x.get("ex_date", "")):
-        div_date = div.get("ex_date", "")
-        if actual_buy_date < div_date <= actual_sell_date:
-            div_amount = float(div.get("amount", 0.0))
-            total_dividend_asset_curr += div_amount * adjusted_shares
-
-    # Gross value at exit in asset currency
-    equity_exit_asset_curr = adjusted_shares * sell_price
-    gross_proceeds_asset_curr = equity_exit_asset_curr + total_dividend_asset_curr
-
-    # Convert back to base currency
-    gross_value_base_curr = gross_proceeds_asset_curr * exit_fx_to_base
-    dividends_base_curr = total_dividend_asset_curr * exit_fx_to_base
-
-    # Return Attribution: Asset Return vs FX Impact
-    # Asset return: return of the stock in local currency converted at initial FX
-    local_gain_asset_curr = gross_proceeds_asset_curr - invest_in_asset_curr
-    asset_return_in_base = local_gain_asset_curr / start_fx_to_asset if start_fx_to_asset > 0 else local_gain_asset_curr
-
-    # FX impact: difference caused by currency change on total asset value
-    fx_impact_in_base = gross_proceeds_asset_curr * (exit_fx_to_base - (1.0 / start_fx_to_asset if start_fx_to_asset > 0 else 1.0))
-
-    gross_profit_base_curr = gross_value_base_curr - initial_amount
-    gross_return_pct = (gross_profit_base_curr / initial_amount) * 100.0 if initial_amount > 0 else 0.0
-
-    # Fees & Taxes
-    buy_fee = initial_amount * fee_rate
-    sell_fee = gross_value_base_curr * fee_rate
-    total_fees = buy_fee + sell_fee
-
-    taxable_gain = max(0.0, gross_profit_base_curr - total_fees)
-    estimated_tax = taxable_gain * tax_rate
-
-    # Net Return
-    net_value_base_curr = gross_value_base_curr - total_fees - estimated_tax
-    net_profit_base_curr = net_value_base_curr - initial_amount
-    net_return_pct = (net_profit_base_curr / initial_amount) * 100.0 if initial_amount > 0 else 0.0
-
-    # Risk Metrics over holding period
-    period_prices = [float(p["close"]) for p in prices if actual_buy_date <= p["date"] <= actual_sell_date]
-    volatility = calculate_volatility(period_prices)
-    max_drawdown = calculate_max_drawdown(period_prices)
-    sharpe_ratio = calculate_sharpe_ratio(period_prices)
-    cagr = calculate_cagr(initial_amount, net_value_base_curr, actual_buy_date, actual_sell_date)
-
-    # Benchmark comparison
+def risk_metrics(values: List[Dict[str, Any]], benchmark_rows: List[Dict[str, Any]], start_value: float, end_value: float, start: str, end: str, risk_free_rate: float):
+    series = [row["value"] for row in values]
+    benchmark_values = [{"date": row["date"], "value": float(row["close"])} for row in _prices(benchmark_rows)]
+    beta = calculate_beta_dated(values, benchmark_values) if benchmark_values else None
     benchmark_return = 0.0
-    benchmark_difference = 0.0
-    if benchmark_prices:
-        b_buy = resolve_price_on_or_after(benchmark_prices, start_date)
-        b_sell = resolve_price_on_or_before(benchmark_prices, end_date)
-        if b_buy and b_sell and float(b_buy["close"]) > 0:
-            b_p_buy = float(b_buy["close"])
-            b_p_sell = float(b_sell["close"])
-            benchmark_return = round(((b_p_sell - b_p_buy) / b_p_buy) * 100.0, 4)
-            benchmark_difference = round(net_return_pct - benchmark_return, 4)
-
+    if benchmark_values and benchmark_values[0]["value"] > 0:
+        benchmark_return = (benchmark_values[-1]["value"] / benchmark_values[0]["value"] - 1) * 100
+    net_return = (end_value / start_value - 1) * 100 if start_value > 0 else 0.0
     return {
-        "mode": "SINGLE_INVESTMENT",
-        "dates": {
-            "requested_start_date": start_date,
-            "requested_end_date": end_date,
-            "actual_buy_date": actual_buy_date,
-            "actual_sell_date": actual_sell_date,
-        },
-        "prices": {
-            "buy_price": round(buy_price, 4),
-            "sell_price": round(sell_price, 4),
-            "initial_shares": round(shares, 6),
-            "adjusted_shares": round(adjusted_shares, 6),
-        },
-        "fx": {
-            "base_currency": base_currency,
-            "asset_currency": asset_currency,
-            "buy_fx_rate": round(usd_inr_buy, 4),
-            "sell_fx_rate": round(usd_inr_sell, 4),
-            "fx_impact": round(fx_impact_in_base, 2),
-        },
-        "financials": {
-            "initial_investment": round(initial_amount, 2),
-            "gross_value": round(gross_value_base_curr, 2),
-            "gross_profit": round(gross_profit_base_curr, 2),
-            "gross_return_percentage": round(gross_return_pct, 4),
-            "dividends": round(dividends_base_curr, 2),
-            "fees": round(total_fees, 2),
-            "estimated_tax": round(estimated_tax, 2),
-            "net_value": round(net_value_base_curr, 2),
-            "net_profit": round(net_profit_base_curr, 2),
-            "net_return_percentage": round(net_return_pct, 4),
-        },
-        "attribution": {
-            "asset_return_amount": round(asset_return_in_base, 2),
-            "fx_impact_amount": round(fx_impact_in_base, 2),
-            "dividend_amount": round(dividends_base_curr, 2),
-            "fees_amount": round(-total_fees, 2),
-            "tax_amount": round(-estimated_tax, 2),
-            "net_profit": round(net_profit_base_curr, 2),
-        },
-        "risk_metrics": {
-            "cagr": cagr,
-            "volatility": volatility,
-            "sharpe_ratio": sharpe_ratio,
-            "max_drawdown": max_drawdown,
-            "benchmark_return": benchmark_return,
-            "benchmark_difference": benchmark_difference,
-        }
+        "cagr": calculate_cagr(start_value, end_value, start, end),
+        "xirr": None,
+        "volatility": calculate_volatility(series),
+        "sharpe_ratio": calculate_sharpe_ratio(series, risk_free_rate),
+        "max_drawdown": calculate_max_drawdown(series),
+        "beta": beta,
+        "benchmark_return": _round(benchmark_return),
+        "benchmark_difference": _round(net_return - benchmark_return),
     }
 
-def main():
+
+def simulate_single(payload: Dict[str, Any]) -> Dict[str, Any]:
+    amount = float(payload["initial_amount"])
+    if amount <= 0:
+        raise ValueError("initial_amount must be positive")
+    start, end = payload["start_date"], payload["end_date"]
+    if start >= end:
+        raise ValueError("start_date must be before end_date")
+    rows = _prices(payload.get("price_history", []))
+    buy, sell = price_on_or_after(rows, start), price_on_or_before(rows, end)
+    if not buy or not sell or buy["date"] > sell["date"]:
+        raise ValueError("No usable price observations in the requested date range")
+    base_currency, asset_currency = payload["base_currency"], payload["asset_currency"]
+    fx_rows = payload.get("exchange_rates", [])
+    buy_fx = fx_rate(fx_rows, buy["date"], asset_currency, base_currency)
+    sell_fx = fx_rate(fx_rows, sell["date"], asset_currency, base_currency)
+    initial_shares = amount / buy_fx / float(buy["close"])
+    splits = split_events(payload.get("corporate_actions", []), buy["date"], sell["date"])
+    final_shares = adjusted_shares(initial_shares, splits, buy["date"], sell["date"])
+    lots = [{"date": buy["date"], "shares": initial_shares, "entry_fx": buy_fx, "amount": amount}]
+    dividend_amount, dividend_flows = dividends_for_lots(lots, payload.get("dividends", []), splits, sell["date"], fx_rows, asset_currency, base_currency)
+    final_equity_asset = final_shares * float(sell["close"])
+    final_equity = final_equity_asset * sell_fx
+    gross_value = final_equity + dividend_amount
+    asset_return = final_equity_asset * buy_fx - amount
+    fx_impact = final_equity_asset * (sell_fx - buy_fx)
+    fee_rate = float(payload.get("fee_rate", 0))
+    fees = amount * fee_rate + gross_value * fee_rate
+    gross_profit = asset_return + fx_impact + dividend_amount
+    estimated_tax = max(0.0, gross_profit - fees) * float(payload.get("tax_rate", 0))
+    net_value = gross_value - fees - estimated_tax
+    net_profit = asset_return + fx_impact + dividend_amount - fees - estimated_tax
+
+    values = []
+    for row in rows:
+        if buy["date"] <= row["date"] <= sell["date"]:
+            shares = adjusted_shares(initial_shares, splits, buy["date"], row["date"])
+            accrued = sum(flow["amount"] for flow in dividend_flows if flow["date"] <= row["date"])
+            values.append({"date": row["date"], "value": shares * float(row["close"]) * fx_rate(fx_rows, row["date"], asset_currency, base_currency) + accrued})
+    metrics = risk_metrics(values, payload.get("benchmark_price_history", []), amount, net_value, buy["date"], sell["date"], float(payload.get("risk_free_rate", 0.065)))
+    metrics["xirr"] = calculate_xirr([(buy["date"], -(amount + amount * fee_rate)), (sell["date"], net_value + amount * fee_rate)])
+    return result("SINGLE_INVESTMENT", amount, gross_value, dividend_amount, fees, estimated_tax, asset_return, fx_impact, net_profit, metrics, {
+        "actual_buy_date": buy["date"], "actual_sell_date": sell["date"], "buy_price": float(buy["close"]), "sell_price": float(sell["close"]), "initial_shares": initial_shares, "adjusted_shares": final_shares,
+    })
+
+
+def add_months(value: date, months: int) -> date:
+    month_index = value.month - 1 + months
+    year, month = value.year + month_index // 12, month_index % 12 + 1
+    return date(year, month, min(value.day, calendar.monthrange(year, month)[1]))
+
+
+def contribution_dates(start: str, end: str, frequency: str) -> List[str]:
+    step = {"MONTHLY": 1, "QUARTERLY": 3, "ANNUALLY": 12}.get(frequency)
+    if not step:
+        raise ValueError("contribution_frequency must be MONTHLY, QUARTERLY, or ANNUALLY")
+    current, finish = datetime.strptime(start, "%Y-%m-%d").date(), datetime.strptime(end, "%Y-%m-%d").date()
+    values = []
+    while current <= finish:
+        values.append(current.isoformat())
+        current = add_months(current, step)
+    return values
+
+
+def simulate_recurring(payload: Dict[str, Any]) -> Dict[str, Any]:
+    contribution = float(payload["initial_amount"])
+    if contribution <= 0:
+        raise ValueError("initial_amount (the recurring contribution) must be positive")
+    start, end = payload["start_date"], payload["end_date"]
+    rows = _prices(payload.get("price_history", []))
+    sell = price_on_or_before(rows, end)
+    if not sell:
+        raise ValueError("No usable terminal price")
+    base_currency, asset_currency = payload["base_currency"], payload["asset_currency"]
+    fx_rows = payload.get("exchange_rates", [])
+    lots = []
+    for scheduled in contribution_dates(start, end, payload.get("contribution_frequency", "MONTHLY")):
+        buy = price_on_or_after(rows, scheduled)
+        if not buy or buy["date"] > sell["date"]:
+            continue
+        entry_fx = fx_rate(fx_rows, buy["date"], asset_currency, base_currency)
+        lots.append({"date": buy["date"], "scheduled_date": scheduled, "shares": contribution / entry_fx / float(buy["close"]), "entry_fx": entry_fx, "amount": contribution})
+    if not lots:
+        raise ValueError("No contribution dates resolved to trading observations")
+    splits = split_events(payload.get("corporate_actions", []), lots[0]["date"], sell["date"])
+    sell_price = float(sell["close"])
+    sell_fx = fx_rate(fx_rows, sell["date"], asset_currency, base_currency)
+    final_lot_assets = [adjusted_shares(lot["shares"], splits, lot["date"], sell["date"]) * sell_price for lot in lots]
+    final_equity = sum(final_lot_assets) * sell_fx
+    dividends, dividend_flows = dividends_for_lots(lots, payload.get("dividends", []), splits, sell["date"], fx_rows, asset_currency, base_currency)
+    invested = contribution * len(lots)
+    asset_return = sum(asset * lot["entry_fx"] - contribution for asset, lot in zip(final_lot_assets, lots))
+    fx_impact = sum(asset * (sell_fx - lot["entry_fx"]) for asset, lot in zip(final_lot_assets, lots))
+    gross_value = final_equity + dividends
+    gross_profit = asset_return + fx_impact + dividends
+    fee_rate = float(payload.get("fee_rate", 0))
+    fees = invested * fee_rate + gross_value * fee_rate
+    tax = max(0.0, gross_profit - fees) * float(payload.get("tax_rate", 0))
+    net_value, net_profit = gross_value - fees - tax, gross_profit - fees - tax
+    flows = [(lot["date"], -(contribution * (1 + fee_rate))) for lot in lots]
+    flows.extend((flow["date"], flow["amount"]) for flow in dividend_flows)
+    flows.append((sell["date"], final_equity - gross_value * fee_rate - tax))
+    metrics = {"cagr": None, "xirr": calculate_xirr(flows), "volatility": None, "sharpe_ratio": None, "max_drawdown": None, "beta": None, "benchmark_return": None, "benchmark_difference": None}
+    output = result("RECURRING_INVESTMENT", invested, gross_value, dividends, fees, tax, asset_return, fx_impact, net_profit, metrics, {"actual_sell_date": sell["date"], "contribution_count": len(lots), "contribution_amount": contribution, "final_shares": sum(asset / sell_price for asset in final_lot_assets)})
+    output["contributions"] = [{"scheduled_date": lot["scheduled_date"], "trade_date": lot["date"], "amount": contribution, "shares": _round(lot["shares"]), "fx_rate": _round(lot["entry_fx"])} for lot in lots]
+    return output
+
+
+def simulate_portfolio(payload: Dict[str, Any]) -> Dict[str, Any]:
+    assets = payload.get("assets", [])
+    amount = float(payload["initial_amount"])
+    if not assets or amount <= 0:
+        raise ValueError("Portfolio scenarios require assets and a positive initial_amount")
+    weights = [float(asset.get("weight", 0)) for asset in assets]
+    if any(weight < 0 for weight in weights) or abs(sum(weights) - 1) > 1e-8:
+        raise ValueError("Portfolio asset weights must be non-negative and sum to 1")
+    component_results = []
+    for asset, weight in zip(assets, weights):
+        component_payload = {**payload, **asset, "initial_amount": amount * weight, "fee_rate": 0, "tax_rate": 0, "mode": "SINGLE_INVESTMENT"}
+        component_results.append(simulate_single(component_payload))
+    gross_value = sum(item["financials"]["gross_value"] for item in component_results)
+    dividends = sum(item["financials"]["dividends"] for item in component_results)
+    asset_return = sum(item["attribution"]["asset_return_amount"] for item in component_results)
+    fx_impact = sum(item["attribution"]["fx_impact_amount"] for item in component_results)
+    gross_profit = asset_return + fx_impact + dividends
+    fee_rate = float(payload.get("fee_rate", 0))
+    fees = amount * fee_rate + gross_value * fee_rate
+    tax = max(0.0, gross_profit - fees) * float(payload.get("tax_rate", 0))
+    net_profit = gross_profit - fees - tax
+    metrics = {"cagr": calculate_cagr(amount, gross_value - fees - tax, payload["start_date"], payload["end_date"]), "xirr": calculate_xirr([(payload["start_date"], -(amount + amount * fee_rate)), (payload["end_date"], gross_value - gross_value * fee_rate - tax)]), "volatility": None, "sharpe_ratio": None, "max_drawdown": None, "beta": None, "benchmark_return": None, "benchmark_difference": None}
+    output = result("PORTFOLIO_SCENARIO", amount, gross_value, dividends, fees, tax, asset_return, fx_impact, net_profit, metrics, {"asset_count": len(assets)})
+    output["assets"] = [{"symbol": asset.get("symbol"), "weight": weight, "result": item} for asset, weight, item in zip(assets, weights, component_results)]
+    return output
+
+
+def result(mode: str, invested: float, gross_value: float, dividends: float, fees: float, tax: float, asset_return: float, fx_impact: float, net_profit: float, metrics: Dict[str, Any], details: Dict[str, Any]) -> Dict[str, Any]:
+    gross_profit = asset_return + fx_impact + dividends
+    return {
+        "mode": mode,
+        "details": {key: _round(value) if isinstance(value, float) else value for key, value in details.items()},
+        "financials": {"initial_investment": _round(invested), "gross_value": _round(gross_value), "gross_profit": _round(gross_profit), "gross_return_percentage": _round(gross_profit / invested * 100), "dividends": _round(dividends), "fees": _round(fees), "estimated_tax": _round(tax), "net_value": _round(invested + net_profit), "net_profit": _round(net_profit), "net_return_percentage": _round(net_profit / invested * 100)},
+        "attribution": {"asset_return_amount": _round(asset_return), "fx_impact_amount": _round(fx_impact), "dividend_amount": _round(dividends), "fees_amount": _round(-fees), "tax_amount": _round(-tax), "net_profit": _round(net_profit), "reconciliation_difference": _round(net_profit - (asset_return + fx_impact + dividends - fees - tax))},
+        "risk_metrics": metrics,
+        "assumptions": ["FX rates are base-currency units per asset-currency unit.", "Corporate actions and dividends are processed by effective date.", "Taxes are educational estimates, not tax advice."],
+    }
+
+
+def main() -> None:
     try:
-        raw_input = sys.stdin.read()
-        if not raw_input:
-            raise ValueError("No input payload received on stdin.")
-
-        payload = json.loads(raw_input)
+        payload = json.loads(sys.stdin.read())
         mode = payload.get("mode", "SINGLE_INVESTMENT")
-
-        if mode == "SINGLE_INVESTMENT":
-            result = simulate_single_investment(payload)
-        else:
-            result = simulate_single_investment(payload)
-
-        print(json.dumps(result))
-        sys.exit(0)
-    except Exception as e:
-        sys.stderr.write(str(e))
+        engines = {"SINGLE_INVESTMENT": simulate_single, "RECURRING_INVESTMENT": simulate_recurring, "PORTFOLIO_SCENARIO": simulate_portfolio}
+        if mode not in engines:
+            raise ValueError(f"Unsupported scenario mode: {mode}")
+        print(json.dumps(engines[mode](payload), separators=(",", ":")))
+    except Exception as error:
+        sys.stderr.write(str(error))
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
-

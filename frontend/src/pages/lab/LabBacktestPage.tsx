@@ -26,12 +26,12 @@ const LabBacktestPage: React.FC = () => {
       portfolioId: data.portfolioId,
       startDate: data.startDate,
       endDate: data.endDate,
-      amount: data.amount,
+      initialAmount: data.amount,
     };
     const created = await runBacktest.mutateAsync(payload);
     setBacktestId(created.id);
     // Invalidate any stale backtest list
-    queryClient.invalidateQueries(["backtests"]);
+    queryClient.invalidateQueries({ queryKey: ["backtests"] });
   };
 
   const handleReset = () => {
@@ -94,10 +94,10 @@ const LabBacktestPage: React.FC = () => {
         <div className="flex space-x-2">
           <button
             type="submit"
-            disabled={runBacktest.isLoading}
+            disabled={runBacktest.isPending}
             className="px-4 py-2 bg-champagne-600 text-white rounded hover:bg-champagne-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-champagne-500"
           >
-            {runBacktest.isLoading ? (
+            {runBacktest.isPending ? (
               <span className="flex items-center"><Loader2 className="animate-spin mr-2"/>Running...</span>
             ) : (
               "Run Backtest"
@@ -126,7 +126,7 @@ const LabBacktestPage: React.FC = () => {
             <p className="text-red-600">Error loading result: {error?.message}</p>
           )}
           {result && (
-          <LabResultView result={result} isLoading={isLoading} isError={isError} error={error} />
+          <LabResultView result={result} isLoading={isLoading} isError={isError} error={error ?? undefined} />
         )}
         </section>
       )}

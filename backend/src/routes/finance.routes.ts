@@ -1,0 +1,22 @@
+import { Router } from 'express';
+import { FinanceController } from '../controllers/finance.controller';
+import { requireAuth } from '../middleware/auth';
+import { validate } from '../middleware/validate';
+import { budgetSchema, goalSchema, idSchema, transactionSchema, transactionUpdateSchema } from '../validators/finance.validator';
+
+const router = Router();
+router.use(requireAuth);
+router.get('/transactions', FinanceController.transactions);
+router.post('/transactions', validate({ body: transactionSchema }), FinanceController.createTransaction);
+router.put('/transactions/:id', validate({ params: idSchema, body: transactionUpdateSchema }), FinanceController.updateTransaction);
+router.delete('/transactions/:id', validate({ params: idSchema }), FinanceController.deleteTransaction);
+router.get('/budgets', FinanceController.budgets);
+router.post('/budgets', validate({ body: budgetSchema }), FinanceController.createBudget);
+router.put('/budgets/:id', validate({ params: idSchema, body: budgetSchema }), FinanceController.updateBudget);
+router.delete('/budgets/:id', validate({ params: idSchema }), FinanceController.deleteBudget);
+router.get('/goals', FinanceController.goals);
+router.post('/goals', validate({ body: goalSchema }), FinanceController.createGoal);
+router.put('/goals/:id', validate({ params: idSchema, body: goalSchema }), FinanceController.updateGoal);
+router.delete('/goals/:id', validate({ params: idSchema }), FinanceController.deleteGoal);
+router.get('/summary', FinanceController.summary);
+export default router;

@@ -1,10 +1,11 @@
 // src/layout/AppLayout.tsx
 import React from 'react';
+import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 
 interface Props {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 const AppLayout: React.FC<Props> = ({ children }) => {
@@ -19,7 +20,7 @@ const AppLayout: React.FC<Props> = ({ children }) => {
       <div className="flex flex-col flex-1 overflow-auto">
         <TopBar />
         <main className="flex-1 p-4 overflow-y-auto bg-background-light dark:bg-background-dark">
-          {children}
+          {children ?? <Outlet />}
         </main>
       </div>
     </div>
@@ -27,4 +28,3 @@ const AppLayout: React.FC<Props> = ({ children }) => {
 };
 
 export default AppLayout;
-

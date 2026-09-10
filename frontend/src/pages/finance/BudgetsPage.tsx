@@ -1,6 +1,6 @@
 // src/pages/finance/BudgetsPage.tsx
 import React from "react";
-import { useBudgets, useCreateBudget, useUpdateBudget, useDeleteBudget, Budget } from "../../hooks/useBudgets";
+import { useBudgets, Budget } from "../../hooks/useBudgets";
 
 const BudgetsPage: React.FC = () => {
   const { data: budgets, isLoading, error } = useBudgets();
@@ -15,7 +15,7 @@ const BudgetsPage: React.FC = () => {
         <ul className="list-disc pl-5">
           {budgets.map((b: Budget) => (
             <li key={b.id}>
-              {b.category}: {b.amount} ({b.period})
+              {b.category}: {b.amount} ({b.startDate} to {b.endDate})
             </li>
           ))}
         </ul>

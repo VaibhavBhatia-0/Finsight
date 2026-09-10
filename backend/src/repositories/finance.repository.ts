@@ -67,6 +67,11 @@ export class FinanceRepository {
     await db.query(`DELETE FROM finance_transactions WHERE id = $1 AND user_id = $2;`, [id, userId]);
   }
 
+  static async updateTransaction(id: string | number, userId: string, data: { category: string; amount: number; description?: string; transactionDate: string }): Promise<any> {
+    const res = await db.query(`UPDATE finance_transactions SET category=$1, amount=$2, description=$3, transaction_date=$4 WHERE id=$5 AND user_id=$6 RETURNING *;`, [data.category, data.amount, data.description || null, data.transactionDate, id, userId]);
+    return res.rows[0] || null;
+  }
+
   // --- BUDGETS ---
   static async createBudget(userId: string, data: {
     category: string;
@@ -93,6 +98,11 @@ export class FinanceRepository {
 
   static async deleteBudget(id: string | number, userId: string): Promise<void> {
     await db.query(`DELETE FROM budgets WHERE id = $1 AND user_id = $2;`, [id, userId]);
+  }
+
+  static async updateBudget(id: string | number, userId: string, data: { category: string; amount: number; startDate: string; endDate: string }): Promise<any> {
+    const res = await db.query(`UPDATE budgets SET category=$1, amount=$2, start_date=$3, end_date=$4 WHERE id=$5 AND user_id=$6 RETURNING *;`, [data.category, data.amount, data.startDate, data.endDate, id, userId]);
+    return res.rows[0] || null;
   }
 
   // --- SAVINGS GOALS ---
@@ -129,8 +139,12 @@ export class FinanceRepository {
     return res.rows[0];
   }
 
+  static async updateSavingsGoal(id: string | number, userId: string, data: { name: string; targetAmount: number; currentAmount: number; targetDate?: string }): Promise<any> {
+    const res = await db.query(`UPDATE savings_goals SET name=$1, target_amount=$2, current_amount=$3, target_date=$4 WHERE id=$5 AND user_id=$6 RETURNING *;`, [data.name, data.targetAmount, data.currentAmount, data.targetDate || null, id, userId]);
+    return res.rows[0] || null;
+  }
+
   static async deleteSavingsGoal(id: string | number, userId: string): Promise<void> {
     await db.query(`DELETE FROM savings_goals WHERE id = $1 AND user_id = $2;`, [id, userId]);
   }
 }
-

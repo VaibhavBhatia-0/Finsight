@@ -21,7 +21,6 @@ export const ReportExportButton: React.FC<ReportExportButtonProps> = ({ endpoint
     try {
       const response = await fetch(`/api/v1/reports/${endpoint}`);
       if (!response.ok) throw new Error(`Server responded with ${response.status}`);
-      const disposition = response.headers.get("content-disposition");
       const contentType = response.headers.get("content-type") || "application/octet-stream";
       const blob = await response.blob();
       const ext = contentType.includes("pdf") ? "pdf" : "csv";

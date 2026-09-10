@@ -4,10 +4,12 @@ import api from '../api/client';
 
 export interface BacktestPayload {
   portfolioId: string;
+  initialAmount: number;
   startDate: string; // ISO string
   endDate: string;   // ISO string
   // Additional parameters such as strategy config can be added here
-  [key: string]: any;
+  name?: string;
+  strategyType?: 'BUY_AND_HOLD';
 }
 
 export interface BacktestResult {
@@ -15,35 +17,39 @@ export interface BacktestResult {
   status: 'pending' | 'running' | 'completed' | 'failed';
   createdAt: string;
   completedAt?: string;
-  summary?: any;
-  details?: any;
+  summary?: Record<string, number | null>;
+  details?: { timeSeries?: Array<{ date: string; value: number }>; strategyType?: string };
+  mode?: string;
+  financials?: Record<string, number>;
+  attribution?: Record<string, number>;
+  risk_metrics?: Record<string, number | null>;
 }
 
 /**
  * Fetch a single backtest result by ID.
  */
 export const useBacktest = (backtestId: string, enabled: boolean = true): UseQueryResult<BacktestResult, Error> => {
-  return useQuery<BacktestResult, Error>(
-    ['backtest', backtestId],
-    async () => {
-      const { data } = await api.get<BacktestResult>(`/api/v1/backtesting/${backtestId}`);
+  return useQuery<BacktestResult, Error>({
+    queryKey: ['backtest', backtestId],
+    queryFn: async () => {
+      const { data } = await api.get<BacktestResult>(`/api/v1/backtests/${backtestId}`);
       return data;
     },
-    { enabled }
-  );
+    enabled,
+  });
 };
 
 /**
  * Fetch a list of backtests.
  */
 export const useBacktests = (params?: Record<string, any>): UseQueryResult<BacktestResult[], Error> => {
-  return useQuery<BacktestResult[], Error>(
-    ['backtests', params],
-    async () => {
-      const { data } = await api.get<BacktestResult[]>('/api/v1/backtesting', { params });
+  return useQuery<BacktestResult[], Error>({
+    queryKey: ['backtests', params],
+    queryFn: async () => {
+      const { data } = await api.get<BacktestResult[]>('/api/v1/backtests', { params });
       return data;
-    }
-  );
+    },
+  });
 };
 
 /**
@@ -51,13 +57,13 @@ export const useBacktests = (params?: Record<string, any>): UseQueryResult<Backt
  */
 export const useRunBacktest = (): UseMutationResult<BacktestResult, Error, BacktestPayload, unknown> => {
   const queryClient = useQueryClient();
-  return useMutation<BacktestResult, Error, BacktestPayload>(
-    async (payload) => {
-      const { data } = await api.post<BacktestResult>('/api/v1/backtesting', payload);
+  return useMutation<BacktestResult, Error, BacktestPayload>({
+    mutationFn: async (payload) => {
+      const { data } = await api.post<BacktestResult>('/api/v1/backtests', payload);
       return data;
     },
-    { onSuccess: () => queryClient.invalidateQueries(['backtests']) }
-  );
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backtests'] }),
+  });
 };
 
 /**
@@ -65,11 +71,10 @@ export const useRunBacktest = (): UseMutationResult<BacktestResult, Error, Backt
  */
 export const useDeleteBacktest = (): UseMutationResult<void, Error, string, unknown> => {
   const queryClient = useQueryClient();
-  return useMutation<void, Error, string>(
-    async (backtestId) => {
-      await api.delete(`/api/v1/backtesting/${backtestId}`);
+  return useMutation<void, Error, string>({
+    mutationFn: async (backtestId) => {
+      await api.delete(`/api/v1/backtests/${backtestId}`);
     },
-    { onSuccess: () => queryClient.invalidateQueries(['backtests']) }
-  );
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backtests'] }),
+  });
 };
-

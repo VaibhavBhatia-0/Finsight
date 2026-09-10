@@ -2,12 +2,13 @@ import { PortfolioRepository, PortfolioTxRow } from '../repositories/portfolio.r
 import { MarketDataService } from './marketData.service';
 import { FXService } from './fx.service';
 import { AppError } from '../middleware/errorHandler';
+import { StockRepository } from '../repositories/stock.repository';
 
 export class PortfolioService {
   /**
    * Replays all portfolio transactions to compute cash balance and derived holdings.
    */
-  public static async calculateState(portfolioId: string | number) {
+  public static async calculateState(portfolioId: string | number, baseCurrency: string, syncHoldings = false) {
     const transactions = await PortfolioRepository.getTransactions(portfolioId);
 
     let cashBalance = 0;
@@ -25,26 +26,32 @@ export class PortfolioService {
       const fee = Number(tx.fee_amount || 0);
       const qty = Number(tx.quantity || 0);
       const price = Number(tx.price || 0);
+      const txCurrency = tx.currency.toUpperCase();
+      const fxRate = txCurrency === baseCurrency.toUpperCase()
+        ? 1
+        : Number(tx.fx_rate) || await FXService.getRate(txCurrency, baseCurrency, tx.transaction_date);
+      const amountBase = amount * fxRate;
+      const feeBase = fee * fxRate;
 
-      totalFees += fee;
+      totalFees += feeBase;
 
       switch (tx.transaction_type) {
         case 'DEPOSIT':
-          cashBalance += amount - fee;
-          totalDeposited += amount;
+          cashBalance += amountBase - feeBase;
+          totalDeposited += amountBase;
           break;
 
         case 'WITHDRAWAL':
-          cashBalance -= (amount + fee);
-          totalWithdrawn += amount;
+          cashBalance -= (amountBase + feeBase);
+          totalWithdrawn += amountBase;
           break;
 
         case 'BUY':
           if (!tx.stock_id) break;
-          cashBalance -= (amount + fee);
+          cashBalance -= (amountBase + feeBase);
           const currentH = holdingsMap.get(tx.stock_id) || { quantity: 0, totalCost: 0, avgCost: 0 };
           const newQty = currentH.quantity + qty;
-          const newTotalCost = currentH.totalCost + amount + fee;
+          const newTotalCost = currentH.totalCost + amountBase + feeBase;
           holdingsMap.set(tx.stock_id, {
             quantity: newQty,
             totalCost: newTotalCost,
@@ -54,11 +61,11 @@ export class PortfolioService {
 
         case 'SELL':
           if (!tx.stock_id) break;
-          cashBalance += (amount - fee);
+          cashBalance += (amountBase - feeBase);
           const holding = holdingsMap.get(tx.stock_id);
           if (holding && holding.quantity > 0) {
             const costOfSoldShares = holding.avgCost * Math.min(qty, holding.quantity);
-            const proceeds = amount - fee;
+            const proceeds = amountBase - feeBase;
             realizedPnL += (proceeds - costOfSoldShares);
 
             const remainingQty = Math.max(0, holding.quantity - qty);
@@ -72,8 +79,8 @@ export class PortfolioService {
           break;
 
         case 'DIVIDEND':
-          cashBalance += (amount - fee);
-          totalDividends += amount;
+          cashBalance += (amountBase - feeBase);
+          totalDividends += amountBase;
           break;
 
         case 'SPLIT':
@@ -91,7 +98,7 @@ export class PortfolioService {
           break;
 
         case 'FEE':
-          cashBalance -= amount;
+          cashBalance -= amountBase;
           break;
       }
     }
@@ -101,7 +108,7 @@ export class PortfolioService {
     for (const [stockId, data] of holdingsMap.entries()) {
       syncData.set(stockId, { quantity: data.quantity, avgCost: data.avgCost });
     }
-    await PortfolioRepository.syncHoldings(portfolioId, syncData);
+    if (syncHoldings) await PortfolioRepository.syncHoldings(portfolioId, syncData);
 
     return {
       cashBalance,
@@ -123,7 +130,7 @@ export class PortfolioService {
       throw new AppError('Portfolio not found', 404, 'PORTFOLIO_NOT_FOUND');
     }
 
-    const state = await this.calculateState(portfolioId);
+    const state = await this.calculateState(portfolioId, portfolio.base_currency);
     const holdings = await PortfolioRepository.getHoldings(portfolioId);
 
     let totalHoldingsValueBase = 0;
@@ -138,7 +145,8 @@ export class PortfolioService {
         // Convert quote and cost to portfolio base currency
         const fx = await FXService.getLatestRate(h.asset_currency, portfolio.base_currency);
         const currentPriceBase = quote.price * fx.rate;
-        const avgCostBase = avgCost * fx.rate;
+        // average_cost is persisted in the portfolio base currency by ledger replay.
+        const avgCostBase = avgCost;
 
         const marketValueBase = qty * currentPriceBase;
         const costBasisBase = qty * avgCostBase;
@@ -203,10 +211,11 @@ export class PortfolioService {
       },
       holdings: holdingsWithWeights,
       risk: {
-        volatility: 14.5,
-        sharpeRatio: 1.45,
-        maxDrawdown: 11.2,
-        beta: 1.05,
+        volatility: null,
+        sharpeRatio: null,
+        maxDrawdown: null,
+        beta: null,
+        status: 'INSUFFICIENT_DATED_PORTFOLIO_SERIES',
       },
     };
   }
@@ -217,22 +226,67 @@ export class PortfolioService {
       throw new AppError('Portfolio not found', 404, 'PORTFOLIO_NOT_FOUND');
     }
 
+    const transactionType = String(txData.transactionType || '').toUpperCase();
+    const supportedTypes = ['BUY', 'SELL', 'DIVIDEND', 'SPLIT', 'DEPOSIT', 'WITHDRAWAL', 'FEE'];
+    if (!supportedTypes.includes(transactionType)) throw new AppError('Unsupported transaction type', 400, 'INVALID_TRANSACTION');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(txData.transactionDate || ''))) throw new AppError('A valid transaction date is required', 400, 'INVALID_TRANSACTION');
+
+    const quantity = Number(txData.quantity ?? 0);
+    const price = Number(txData.price ?? 0);
+    const submittedAmount = Number(txData.amount ?? 0);
+    const feeAmount = Number(txData.feeAmount ?? 0);
+    if (!Number.isFinite(feeAmount) || feeAmount < 0) throw new AppError('Fee amount cannot be negative', 400, 'INVALID_TRANSACTION');
+
+    let amount = submittedAmount;
+    let stock: any = null;
+    if (['BUY', 'SELL'].includes(transactionType)) {
+      if (!txData.stockId || quantity <= 0 || price <= 0) throw new AppError('BUY and SELL require a stock, positive quantity, and positive price', 400, 'INVALID_TRANSACTION');
+      stock = await StockRepository.findById(txData.stockId);
+      if (!stock) throw new AppError('Stock not found', 400, 'INVALID_STOCK');
+      amount = quantity * price;
+      if (txData.amount !== undefined && Math.abs(submittedAmount - amount) > Math.max(0.01, amount * 1e-8)) {
+        throw new AppError('Transaction amount must equal quantity multiplied by price', 400, 'AMOUNT_MISMATCH');
+      }
+    } else if (transactionType === 'SPLIT') {
+      if (!txData.stockId || quantity <= 0) throw new AppError('SPLIT requires a stock and positive split ratio in quantity', 400, 'INVALID_TRANSACTION');
+      amount = 0;
+    } else if (!Number.isFinite(amount) || amount <= 0) {
+      throw new AppError('Transaction amount must be positive', 400, 'INVALID_TRANSACTION');
+    }
+
+    const currency = String(txData.currency || stock?.currency || portfolio.base_currency).toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) throw new AppError('Currency must be a three-letter ISO code', 400, 'INVALID_CURRENCY');
+    const fxRate = currency === portfolio.base_currency
+      ? 1
+      : (txData.fxRate ? Number(txData.fxRate) : await FXService.getRate(currency, portfolio.base_currency, txData.transactionDate));
+    if (!Number.isFinite(fxRate) || fxRate <= 0) throw new AppError('FX rate must be positive', 400, 'INVALID_FX_RATE');
+
+    const state = await this.calculateState(portfolioId, portfolio.base_currency);
+    const amountBase = amount * fxRate;
+    const feeBase = feeAmount * fxRate;
+    if (transactionType === 'SELL') {
+      const held = state.holdingsMap.get(txData.stockId)?.quantity ?? 0;
+      if (quantity > held + 1e-8) throw new AppError('Cannot sell more shares than the portfolio holds', 409, 'INSUFFICIENT_HOLDINGS');
+    }
+    if (transactionType === 'BUY' && amountBase + feeBase > state.cashBalance + 0.01) throw new AppError('Insufficient portfolio cash for this purchase', 409, 'INSUFFICIENT_CASH');
+    if (transactionType === 'WITHDRAWAL' && amountBase + feeBase > state.cashBalance + 0.01) throw new AppError('Insufficient portfolio cash for this withdrawal', 409, 'INSUFFICIENT_CASH');
+
     const tx = await PortfolioRepository.addTransaction({
       portfolioId,
       stockId: txData.stockId,
-      transactionType: txData.transactionType,
+      transactionType,
       transactionDate: txData.transactionDate,
-      quantity: txData.quantity,
-      price: txData.price,
-      amount: txData.amount,
-      currency: txData.currency || portfolio.base_currency,
-      feeAmount: txData.feeAmount,
-      fxRate: txData.fxRate,
+      quantity: quantity || null,
+      price: price || null,
+      amount,
+      currency,
+      feeAmount,
+      fxRate,
       notes: txData.notes,
     });
 
     // Replay state immediately
-    await this.calculateState(portfolioId);
+    await this.calculateState(portfolioId, portfolio.base_currency, true);
     return tx;
   }
 }
@@ -240,4 +294,3 @@ export class PortfolioService {
 function round2(val: number): number {
   return Math.round(val * 100) / 100;
 }
-

@@ -1,8 +1,6 @@
 // src/components/FreshnessBadge.tsx
 import React from 'react';
-import { Tooltip } from 'react-tooltip'; // assuming a lightweight tooltip library, otherwise fallback to title
-
-type Freshness = 'Live' | 'Delayed' | 'End-of-day' | 'Historical';
+type Freshness = 'Live' | 'Delayed' | 'End-of-day' | 'Historical' | 'Static' | 'Synthetic';
 
 interface Props {
   freshness: Freshness;
@@ -14,6 +12,8 @@ const colorMap: Record<Freshness, string> = {
   Delayed: 'bg-yellow-500',
   'End-of-day': 'bg-blue-500',
   Historical: 'bg-gray-500',
+  Static: 'bg-slate-500',
+  Synthetic: 'bg-orange-600',
 };
 
 export const FreshnessBadge: React.FC<Props> = ({ freshness, timestamp }) => {
@@ -29,3 +29,4 @@ export const FreshnessBadge: React.FC<Props> = ({ freshness, timestamp }) => {
   );
 };
 
+export default FreshnessBadge;
