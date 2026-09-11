@@ -77,7 +77,6 @@ describe('FinSight Lab Scenarios API Integration Tests', () => {
       body: JSON.stringify({
         name: 'My NVDA 2023 Ride',
         symbol: 'NVDA',
-        stockId: 5,
         startDate: '2023-06-01',
         endDate: '2024-01-02',
         initialAmount: 50000,
@@ -119,5 +118,79 @@ describe('FinSight Lab Scenarios API Integration Tests', () => {
     expect(data.data.name).toBe('My NVDA 2023 Ride');
     expect(data.data.assets.length).toBe(1);
     expect(data.data.result.attribution).toBeDefined();
+  });
+
+  it('5. POST /api/v1/scenarios/simulate accepts the portfolio scenario contract', async () => {
+    const res = await fetch(`${baseUrl}/api/v1/scenarios/simulate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scenarioType: 'PORTFOLIO_SCENARIO',
+        assets: [{ symbol: 'AAPL', weight: 0.6 }, { symbol: 'MSFT', weight: 0.4 }],
+        startDate: '2023-06-01',
+        endDate: '2024-01-02',
+        initialAmount: 100000,
+        baseCurrency: 'INR',
+      }),
+    });
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.data.mode).toBe('PORTFOLIO_SCENARIO');
+    expect(data.data.assets).toHaveLength(2);
+  });
+
+  it('6. POST /api/v1/scenarios/compare returns only authenticated user scenarios', async () => {
+    const second = await fetch(`${baseUrl}/api/v1/scenarios`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ name: 'Second scenario', symbol: 'AAPL', startDate: '2023-06-01', endDate: '2024-01-02', initialAmount: 25000, baseCurrency: 'INR', scenarioType: 'SINGLE_INVESTMENT' }),
+    });
+    const secondId = (await second.json()).data.scenario.id;
+    const compare = await fetch(`${baseUrl}/api/v1/scenarios/compare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ scenarioIds: [savedScenarioId, secondId] }),
+    });
+    const data = await compare.json();
+    expect(compare.status).toBe(200);
+    expect(data.data.comparisons).toHaveLength(2);
+    expect(data.data.metrics).toHaveLength(2);
+    expect(data.data.metrics[0]).toMatchObject({ scenarioId: savedScenarioId, currency: 'INR' });
+    expect(typeof data.data.metrics[0].returnPercentage).toBe('number');
+    expect(data.data.normalization).toEqual({ basis: 'PERCENTAGE_METRICS', currencies: ['INR'], absoluteValuesComparable: true });
+
+    const detail = await fetch(`${baseUrl}/api/v1/scenarios/${savedScenarioId}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const detailData = await detail.json();
+    expect(detailData.data.comparisonIds.map(String)).toContain(String(secondId));
+  });
+
+  it('7. POST /api/v1/scenarios atomically persists the recurring contribution ledger', async () => {
+    const response = await fetch(`${baseUrl}/api/v1/scenarios`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({
+        name: 'Monthly NVDA contributions',
+        scenarioType: 'RECURRING_INVESTMENT',
+        symbol: 'NVDA',
+        startDate: '2023-06-01',
+        endDate: '2023-09-04',
+        initialAmount: 1000,
+        baseCurrency: 'INR',
+        contributionFrequency: 'MONTHLY',
+      }),
+    });
+    const created = await response.json();
+    expect(response.status).toBe(201);
+    expect(created.data.simulation.contributions).toHaveLength(4);
+
+    const detail = await fetch(`${baseUrl}/api/v1/scenarios/${created.data.scenario.id}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const detailData = await detail.json();
+    expect(detailData.data.contributions).toHaveLength(4);
+    expect(detailData.data.contributions.map((item: any) => Number(item.amount))).toEqual([1000, 1000, 1000, 1000]);
+    expect(detailData.data.contributions.every((item: any) => item.currency === 'INR')).toBe(true);
   });
 });

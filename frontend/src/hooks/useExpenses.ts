@@ -1,33 +1,55 @@
 // src/hooks/useExpenses.ts
 import { useQuery, useMutation, useQueryClient, UseQueryResult, UseMutationResult } from "@tanstack/react-query";
 import api from "../api/client";
+import type { ApiId, FinanceTransactionRow } from "../api/contracts";
+import { endpoints } from "../api/endpoints";
 
 export interface Expense {
-  id: string;
+  id: ApiId;
   amount: number;
   category: string;
   date: string; // ISO date string
   description?: string;
+  currency: string;
 }
 
-export const useExpenses = (params?: Record<string, any>): UseQueryResult<Expense[], Error> => {
+export type NewExpense = Omit<Expense, 'id'>;
+
+export interface ExpenseQuery {
+  category?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+function toExpense(item: FinanceTransactionRow): Expense {
+  return {
+    id: item.id,
+    amount: Number(item.amount),
+    category: item.category,
+    date: item.transaction_date.slice(0, 10),
+    description: item.description ?? undefined,
+    currency: item.currency,
+  };
+}
+
+export const useExpenses = (params?: ExpenseQuery): UseQueryResult<Expense[], Error> => {
   return useQuery<Expense[], Error>({
     queryKey: ["expenses", params],
     queryFn: async () => {
-      const { data } = await api.get<Array<{ id: string; amount: number; category: string; transaction_date: string; description?: string }>>("/api/v1/finance/transactions", { params: { ...params, type: 'EXPENSE' } });
-      return data.map(item => ({ id: item.id, amount: Number(item.amount), category: item.category, date: item.transaction_date, description: item.description }));
+      const { data } = await api.get<FinanceTransactionRow[]>(endpoints.finance.transactions, { params: { ...params, type: 'EXPENSE' } });
+      return data.map(toExpense);
     }
   });
 };
 
-export const useCreateExpense = (): UseMutationResult<Expense, Error, Omit<Expense, 'id'>, unknown> => {
+export const useCreateExpense = (): UseMutationResult<Expense, Error, NewExpense, unknown> => {
   const queryClient = useQueryClient();
-  return useMutation<Expense, Error, Omit<Expense, 'id'>>({
+  return useMutation<Expense, Error, NewExpense>({
     mutationFn: async (newExpense) => {
-      const { data } = await api.post<any>("/api/v1/finance/transactions", { transactionType: 'EXPENSE', transactionDate: newExpense.date, category: newExpense.category, amount: newExpense.amount, description: newExpense.description, currency: 'INR' });
-      return { id: data.id, amount: Number(data.amount), category: data.category, date: data.transaction_date, description: data.description };
+      const { data } = await api.post<FinanceTransactionRow>(endpoints.finance.transactions, { transactionType: 'EXPENSE', transactionDate: newExpense.date, category: newExpense.category, amount: newExpense.amount, description: newExpense.description, currency: newExpense.currency });
+      return toExpense(data);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["expenses"] }),
+    onSuccess: () => Promise.all([["expenses"], ['finance-transactions'], ['finance-summary'], ['insights']].map(queryKey => queryClient.invalidateQueries({ queryKey }))),
   });
 };
 
@@ -35,19 +57,19 @@ export const useUpdateExpense = (): UseMutationResult<Expense, Error, Expense, u
   const queryClient = useQueryClient();
   return useMutation<Expense, Error, Expense>({
     mutationFn: async (expense) => {
-      const { data } = await api.put<any>(`/api/v1/finance/transactions/${expense.id}`, { transactionDate: expense.date, category: expense.category, amount: expense.amount, description: expense.description });
-      return { id: data.id, amount: Number(data.amount), category: data.category, date: data.transaction_date, description: data.description };
+      const { data } = await api.put<FinanceTransactionRow>(endpoints.finance.transaction(expense.id), { transactionDate: expense.date, category: expense.category, amount: expense.amount, description: expense.description });
+      return toExpense(data);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["expenses"] }),
+    onSuccess: () => Promise.all([["expenses"], ['finance-transactions'], ['finance-summary'], ['insights']].map(queryKey => queryClient.invalidateQueries({ queryKey }))),
   });
 };
 
-export const useDeleteExpense = (): UseMutationResult<void, Error, string, unknown> => {
+export const useDeleteExpense = (): UseMutationResult<void, Error, ApiId, unknown> => {
   const queryClient = useQueryClient();
-  return useMutation<void, Error, string>({
+  return useMutation<void, Error, ApiId>({
     mutationFn: async (expenseId) => {
-      await api.delete(`/api/v1/finance/transactions/${expenseId}`);
+      await api.delete(endpoints.finance.transaction(expenseId));
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["expenses"] }),
+    onSuccess: () => Promise.all([["expenses"], ['finance-transactions'], ['finance-summary'], ['insights']].map(queryKey => queryClient.invalidateQueries({ queryKey }))),
   });
 };

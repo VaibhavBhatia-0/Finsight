@@ -4,6 +4,7 @@ import { PortfolioRepository } from '../repositories/portfolio.repository';
 import { AnalyticsService } from './analytics.service';
 import { FXService } from './fx.service';
 import { MarketDataService } from './marketData.service';
+import { db } from '../database/db';
 
 export class BacktestService {
   static async run(userId: string, input: any) {
@@ -37,17 +38,19 @@ export class BacktestService {
       base_currency: portfolio.base_currency,
       assets,
     });
-    const backtest = await BacktestRepository.create(userId, {
-      name: input.name || `${portfolio.name} backtest`,
-      strategyType,
-      baseCurrency: portfolio.base_currency,
-      startDate: input.startDate,
-      endDate: input.endDate,
-      initialAmount: input.initialAmount,
-      parameters: { portfolioId: portfolio.id },
+    return db.transaction(async executor => {
+      const backtest = await BacktestRepository.create(userId, {
+        name: input.name || `${portfolio.name} backtest`,
+        strategyType,
+        baseCurrency: portfolio.base_currency,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        initialAmount: input.initialAmount,
+        parameters: { portfolioId: portfolio.id },
+      }, executor);
+      await BacktestRepository.saveResult(backtest.id, calculated, executor);
+      return this.present(await BacktestRepository.find(backtest.id, userId, executor));
     });
-    await BacktestRepository.saveResult(backtest.id, calculated);
-    return this.present(await BacktestRepository.find(backtest.id, userId));
   }
 
   static present(row: any) {

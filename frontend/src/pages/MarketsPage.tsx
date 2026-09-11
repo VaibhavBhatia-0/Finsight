@@ -3,22 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { PlusIcon, SearchIcon } from 'lucide-react';
 import api from '../api/client';
+import type { ApiId, MarketStock } from '../api/contracts';
+import { endpoints } from '../api/endpoints';
 import FreshnessBadge from '../components/FreshnessBadge';
 import { Spinner } from '../components/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { useWatchlist } from '../hooks/useWatchlist';
-
-interface StockSummary {
-  id: string;
-  symbol: string;
-  company_name: string;
-  currency: string;
-  quote: {
-    price: number;
-    changePercent: number;
-    timestamp: string;
-  };
-}
 
 export default function MarketsPage() {
   const pageSize = 20;
@@ -26,10 +16,10 @@ export default function MarketsPage() {
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
   const { user } = useAuth();
-  const watchlist = useWatchlist();
+  const watchlist = useWatchlist(Boolean(user));
   const stocks = useQuery({
     queryKey: ['markets', search],
-    queryFn: async () => (await api.get<StockSummary[]>('/api/v1/markets/stocks', { params: { q: search } })).data,
+    queryFn: async () => (await api.get<MarketStock[]>(endpoints.markets.stocks, { params: { q: search } })).data,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -39,7 +29,7 @@ export default function MarketsPage() {
   );
   const totalPages = Math.max(1, Math.ceil((stocks.data?.length ?? 0) / pageSize));
 
-  function add(stockId: string) {
+  function add(stockId: ApiId) {
     if (!user) { navigate('/login'); return; }
     watchlist.addToWatchlist(stockId);
   }

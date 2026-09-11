@@ -1,4 +1,4 @@
-import { db } from '../database/db';
+import { db, IDatabaseExecutor } from '../database/db';
 
 export interface PortfolioRow {
   id: string;
@@ -73,8 +73,8 @@ export class PortfolioRepository {
     `, [id, userId]);
   }
 
-  static async getTransactions(portfolioId: string | number): Promise<PortfolioTxRow[]> {
-    const res = await db.query<PortfolioTxRow>(`
+  static async getTransactions(portfolioId: string | number, executor: IDatabaseExecutor = db): Promise<PortfolioTxRow[]> {
+    const res = await executor.query<PortfolioTxRow>(`
       SELECT 
         pt.*,
         s.symbol,
@@ -99,8 +99,8 @@ export class PortfolioRepository {
     feeAmount?: number;
     fxRate?: number | null;
     notes?: string | null;
-  }): Promise<PortfolioTxRow> {
-    const res = await db.query<PortfolioTxRow>(`
+  }, executor: IDatabaseExecutor = db): Promise<PortfolioTxRow> {
+    const res = await executor.query<PortfolioTxRow>(`
       INSERT INTO portfolio_transactions (
         portfolio_id, stock_id, transaction_type, transaction_date,
         quantity, price, amount, currency, fee_amount, fx_rate, notes
@@ -140,14 +140,14 @@ export class PortfolioRepository {
     return res.rows;
   }
 
-  static async syncHoldings(portfolioId: string | number, holdingsMap: Map<string | number, { quantity: number; avgCost: number }>): Promise<void> {
+  static async syncHoldings(portfolioId: string | number, holdingsMap: Map<string | number, { quantity: number; avgCost: number }>, executor: IDatabaseExecutor = db): Promise<void> {
     // Delete existing holdings
-    await db.query(`DELETE FROM portfolio_holdings WHERE portfolio_id = $1;`, [portfolioId]);
+    await executor.query(`DELETE FROM portfolio_holdings WHERE portfolio_id = $1;`, [portfolioId]);
 
     // Insert active holdings (quantity > 0)
     for (const [stockId, data] of holdingsMap.entries()) {
       if (data.quantity > 0.00000001) {
-        await db.query(`
+        await executor.query(`
           INSERT INTO portfolio_holdings (portfolio_id, stock_id, quantity, average_cost)
           VALUES ($1, $2, $3, $4);
         `, [portfolioId, stockId, data.quantity, data.avgCost]);
@@ -155,4 +155,3 @@ export class PortfolioRepository {
     }
   }
 }
-

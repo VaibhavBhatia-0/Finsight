@@ -62,18 +62,7 @@ export class ScenarioController {
   static async compareScenarios(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;
-      const { scenarioIds } = req.body;
-      if (!Array.isArray(scenarioIds) || scenarioIds.length < 2) {
-        sendError(res, 400, 'INVALID_INPUT', 'At least two scenario IDs must be provided for comparison');
-        return;
-      }
-
-      const scenarios = await Promise.all(
-        scenarioIds.map(id => ScenarioRepository.findById(id, userId))
-      );
-
-      const validScenarios = scenarios.filter(Boolean);
-      sendSuccess(res, { comparisons: validScenarios }, 200, 'Historical');
+      sendSuccess(res, await ScenarioService.compareScenarios(userId, req.body.scenarioIds), 200, 'Historical');
     } catch (error) {
       next(error);
     }

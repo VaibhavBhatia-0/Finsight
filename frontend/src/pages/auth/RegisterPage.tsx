@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import AuthShell, { buttonClass, inputClass } from './AuthShell';
+import GoogleSignInButton from './GoogleSignInButton';
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -37,6 +38,7 @@ export default function RegisterPage() {
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         <button className={buttonClass} disabled={submitting}>{submitting ? 'Creating…' : 'Create account'}</button>
       </form>
+      <GoogleSignInButton />
     </AuthShell>
   );
 }

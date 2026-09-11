@@ -1,15 +1,20 @@
-import { Pool, QueryResult, QueryResultRow } from 'pg';
+import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { PGlite } from '@electric-sql/pglite';
 import dotenv from 'dotenv';
 import path from 'path';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-export interface IDatabaseClient {
+export interface IDatabaseExecutor {
   query<T extends QueryResultRow = any>(sql: string, params?: any[]): Promise<{ rows: T[]; rowCount: number | null }>;
+  exec(sql: string): Promise<any>;
+}
+
+export interface IDatabaseClient extends IDatabaseExecutor {
   exec(sql: string): Promise<any>;
   close(): Promise<void>;
   getDriverName(): string;
+  transaction<T>(callback: (executor: IDatabaseExecutor) => Promise<T>): Promise<T>;
 }
 
 class PostgresClient implements IDatabaseClient {
@@ -40,6 +45,27 @@ class PostgresClient implements IDatabaseClient {
   getDriverName(): string {
     return 'pg (Native PostgreSQL Pool)';
   }
+
+  async transaction<T>(callback: (executor: IDatabaseExecutor) => Promise<T>): Promise<T> {
+    const client: PoolClient = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await callback({
+        query: async <R extends QueryResultRow = any>(sql: string, params?: any[]) => {
+          const response = await client.query<R>(sql, params);
+          return { rows: response.rows, rowCount: response.rowCount };
+        },
+        exec: async (sql: string) => client.query(sql),
+      });
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 class PGliteClient implements IDatabaseClient {
@@ -64,6 +90,16 @@ class PGliteClient implements IDatabaseClient {
 
   getDriverName(): string {
     return 'PGlite (PostgreSQL 16 Engine)';
+  }
+
+  async transaction<T>(callback: (executor: IDatabaseExecutor) => Promise<T>): Promise<T> {
+    return this.pglite.transaction(async transaction => callback({
+      query: async <R extends QueryResultRow = any>(sql: string, params?: any[]) => {
+        const response = await transaction.query<R>(sql, params);
+        return { rows: response.rows as R[], rowCount: response.rows.length };
+      },
+      exec: (sql: string) => transaction.exec(sql),
+    }));
   }
 }
 
@@ -92,5 +128,11 @@ export const db = {
   async query<T extends QueryResultRow = any>(sql: string, params?: any[]): Promise<{ rows: T[]; rowCount: number | null }> {
     const client = getDatabaseClient();
     return client.query<T>(sql, params);
+  },
+  async exec(sql: string): Promise<any> {
+    return getDatabaseClient().exec(sql);
+  },
+  async transaction<T>(callback: (executor: IDatabaseExecutor) => Promise<T>): Promise<T> {
+    return getDatabaseClient().transaction(callback);
   }
 };

@@ -4,7 +4,6 @@ import { useForm, SubmitHandler } from "react-hook-form";
 import { useRunBacktest, useBacktest } from "../../hooks/useBacktest";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import LabResultView from "./LabResultView";
 
 
 interface FormValues {
@@ -23,7 +22,7 @@ const LabBacktestPage: React.FC = () => {
 
   const onSubmit: SubmitHandler<FormValues> = async (data) => {
     const payload = {
-      portfolioId: data.portfolioId,
+      portfolioId: Number(data.portfolioId),
       startDate: data.startDate,
       endDate: data.endDate,
       initialAmount: data.amount,
@@ -114,7 +113,7 @@ const LabBacktestPage: React.FC = () => {
       </form>
 
       {/* Result section */}
-      {backtestId && (
+      {(runBacktest.error || backtestId) && (
         <section className="mt-8">
           <h2 className="text-xl font-semibold mb-2">Backtest Result</h2>
           {isLoading && (
@@ -125,13 +124,25 @@ const LabBacktestPage: React.FC = () => {
           {isError && (
             <p className="text-red-600">Error loading result: {error?.message}</p>
           )}
+          {runBacktest.error && <p className="text-red-600">Unable to run backtest: {runBacktest.error.message}</p>}
           {result && (
-          <LabResultView result={result} isLoading={isLoading} isError={isError} error={error ?? undefined} />
-        )}
+            <div className="grid gap-3 rounded border p-4 sm:grid-cols-2">
+              <Metric label="Strategy" value={result.details.strategyType} />
+              <Metric label="Status" value={result.status} />
+              <Metric label="Total invested" value={result.summary.totalInvested.toLocaleString()} />
+              <Metric label="Final value" value={result.summary.finalValue.toLocaleString()} />
+              <Metric label="Absolute return" value={result.summary.absoluteReturn.toLocaleString()} />
+              <Metric label="Return" value={`${result.summary.returnPercentage.toFixed(2)}%`} />
+            </div>
+          )}
         </section>
       )}
     </main>
   );
 };
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return <div><p className="text-sm text-gray-500">{label}</p><p className="font-semibold">{value}</p></div>;
+}
 
 export default LabBacktestPage;

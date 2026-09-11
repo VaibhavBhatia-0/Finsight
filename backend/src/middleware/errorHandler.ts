@@ -45,22 +45,17 @@ export function errorHandler(
 
   // PostgreSQL Unique Constraint Violation
   if (err.code === '23505') {
-    sendError(res, 409, 'DUPLICATE_RESOURCE', 'A resource with these unique attributes already exists', [
-      { detail: err.detail }
-    ]);
+    sendError(res, 409, 'DUPLICATE_RESOURCE', 'A resource with these unique attributes already exists');
     return;
   }
 
   // PostgreSQL Foreign Key Violation
   if (err.code === '23503') {
-    sendError(res, 400, 'FOREIGN_KEY_VIOLATION', 'Referenced entity does not exist', [
-      { detail: err.detail }
-    ]);
+    sendError(res, 400, 'FOREIGN_KEY_VIOLATION', 'Referenced entity does not exist');
     return;
   }
 
   // Unhandled / Internal Server Error
-  console.error('[Unhandled Error]', err);
+  console.error(JSON.stringify({ level: 'error', event: 'unhandled_error', method: req.method, path: req.path, message: err instanceof Error ? err.message : 'Unknown error', timestamp: new Date().toISOString() }));
   sendError(res, 500, 'INTERNAL_SERVER_ERROR', 'An unexpected internal error occurred');
 }
-

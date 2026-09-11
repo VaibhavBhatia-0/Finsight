@@ -141,7 +141,7 @@ def simulate_single(payload: Dict[str, Any]) -> Dict[str, Any]:
     fee_rate = float(payload.get("fee_rate", 0))
     fees = amount * fee_rate + gross_value * fee_rate
     gross_profit = asset_return + fx_impact + dividend_amount
-    estimated_tax = max(0.0, gross_profit - fees) * float(payload.get("tax_rate", 0))
+    estimated_tax = max(0.0, gross_profit - fees - float(payload.get("tax_exemption", 0))) * float(payload.get("tax_rate", 0))
     net_value = gross_value - fees - estimated_tax
     net_profit = asset_return + fx_impact + dividend_amount - fees - estimated_tax
 
@@ -209,7 +209,7 @@ def simulate_recurring(payload: Dict[str, Any]) -> Dict[str, Any]:
     gross_profit = asset_return + fx_impact + dividends
     fee_rate = float(payload.get("fee_rate", 0))
     fees = invested * fee_rate + gross_value * fee_rate
-    tax = max(0.0, gross_profit - fees) * float(payload.get("tax_rate", 0))
+    tax = max(0.0, gross_profit - fees - float(payload.get("tax_exemption", 0))) * float(payload.get("tax_rate", 0))
     net_value, net_profit = gross_value - fees - tax, gross_profit - fees - tax
     flows = [(lot["date"], -(contribution * (1 + fee_rate))) for lot in lots]
     flows.extend((flow["date"], flow["amount"]) for flow in dividend_flows)
@@ -239,7 +239,7 @@ def simulate_portfolio(payload: Dict[str, Any]) -> Dict[str, Any]:
     gross_profit = asset_return + fx_impact + dividends
     fee_rate = float(payload.get("fee_rate", 0))
     fees = amount * fee_rate + gross_value * fee_rate
-    tax = max(0.0, gross_profit - fees) * float(payload.get("tax_rate", 0))
+    tax = max(0.0, gross_profit - fees - float(payload.get("tax_exemption", 0))) * float(payload.get("tax_rate", 0))
     net_profit = gross_profit - fees - tax
     metrics = {"cagr": calculate_cagr(amount, gross_value - fees - tax, payload["start_date"], payload["end_date"]), "xirr": calculate_xirr([(payload["start_date"], -(amount + amount * fee_rate)), (payload["end_date"], gross_value - gross_value * fee_rate - tax)]), "volatility": None, "sharpe_ratio": None, "max_drawdown": None, "beta": None, "benchmark_return": None, "benchmark_difference": None}
     output = result("PORTFOLIO_SCENARIO", amount, gross_value, dividends, fees, tax, asset_return, fx_impact, net_profit, metrics, {"asset_count": len(assets)})

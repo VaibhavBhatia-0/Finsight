@@ -97,7 +97,7 @@ describe('Markets & FX API Integration Tests (/api/v1/markets)', () => {
   });
 
   it('6. GET /api/v1/markets/screener filters by multi-parameter criteria', async () => {
-    const res = await fetch(`${baseUrl}/api/v1/markets/screener?minPrice=100&sortBy=peRatio&sortOrder=asc`);
+    const res = await fetch(`${baseUrl}/api/v1/markets/screener?minPrice=100&maxDivYield=3.5&minEps=1&minVolume=1000000&minYearPosition=0&movingAverageRelation=GOLDEN_CROSS&sortBy=peRatio&sortOrder=asc`);
     const data = await res.json();
 
     expect(res.status).toBe(200);
@@ -107,7 +107,19 @@ describe('Markets & FX API Integration Tests (/api/v1/markets)', () => {
 
     for (const item of data.data.items) {
       expect(item.price).toBeGreaterThanOrEqual(100);
+      expect(item.dividendYield).toBeLessThanOrEqual(3.5);
+      expect(item.eps).toBeGreaterThanOrEqual(1);
+      expect(item.volume).toBeGreaterThanOrEqual(1000000);
+      expect(item.yearPosition).toBeGreaterThanOrEqual(0);
+      expect(item.sma50).toBeGreaterThan(item.sma200);
     }
+  });
+
+  it('6b. GET /api/v1/markets/screener rejects invalid filter values', async () => {
+    const res = await fetch(`${baseUrl}/api/v1/markets/screener?minRsi=101`);
+    const data = await res.json();
+    expect(res.status).toBe(400);
+    expect(data).toMatchObject({ success: false, error: { code: 'VALIDATION_ERROR' } });
   });
 
   it('7. GET /api/v1/markets/fx returns dynamic exchange rate', async () => {
@@ -121,4 +133,3 @@ describe('Markets & FX API Integration Tests (/api/v1/markets)', () => {
     expect(data.data.rate).toBeGreaterThan(50.0);
   });
 });
-

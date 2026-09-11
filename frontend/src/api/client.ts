@@ -15,14 +15,14 @@ export interface ApiMeta {
   [key: string]: unknown;
 }
 
-interface ApiEnvelope<T> {
+export interface ApiEnvelope<T> {
   success: true;
   data: T;
   error: null;
   meta: ApiMeta;
 }
 
-interface ApiErrorEnvelope {
+export interface ApiErrorEnvelope {
   success: false;
   error: { code: string; message: string; details?: unknown[] };
 }
@@ -32,9 +32,17 @@ export interface ApiResult<T> {
   meta: ApiMeta;
 }
 
+export type QueryValue = string | number | boolean | null | undefined;
+export type QueryParams = Record<string, QueryValue>;
+
 export interface RequestConfig {
-  params?: Record<string, unknown>;
+  params?: QueryParams;
   signal?: AbortSignal;
+}
+
+export interface DownloadResult {
+  blob: Blob;
+  filename: string | null;
 }
 
 export class ApiError extends Error {
@@ -56,7 +64,7 @@ function getToken(): string | null {
   return sessionStorage.getItem('jwt') ?? localStorage.getItem('jwt');
 }
 
-function buildUrl(path: string, params?: Record<string, unknown>): string {
+function buildUrl(path: string, params?: QueryParams): string {
   const runtimeBase = apiBaseUrl || (typeof window === 'undefined' ? 'http://localhost' : '');
   const url = `${runtimeBase}${path.startsWith('/') ? path : `/${path}`}`;
   if (!params) return url;
@@ -105,12 +113,39 @@ async function request<T>(
   return { data: payload.data, meta: payload.meta };
 }
 
+async function download(path: string, config?: RequestConfig): Promise<DownloadResult> {
+  const token = getToken();
+  const response = await fetch(buildUrl(path, config?.params), {
+    method: 'GET',
+    signal: config?.signal,
+    headers: {
+      Accept: 'text/csv, application/pdf',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as ApiErrorEnvelope | null;
+    if (response.status === 401) {
+      sessionStorage.removeItem('jwt');
+      localStorage.removeItem('jwt');
+    }
+    const error = payload?.success === false ? payload.error : undefined;
+    throw new ApiError(error?.message ?? `Request failed with status ${response.status}`, response.status, error?.code ?? 'HTTP_ERROR', error?.details);
+  }
+  const disposition = response.headers.get('Content-Disposition');
+  return {
+    blob: await response.blob(),
+    filename: disposition?.match(/filename="?([^";]+)"?/i)?.[1] ?? null,
+  };
+}
+
 export const api = {
   get: <T>(path: string, config?: RequestConfig) => request<T>('GET', path, undefined, config),
   post: <T>(path: string, body?: unknown, config?: RequestConfig) => request<T>('POST', path, body, config),
   put: <T>(path: string, body?: unknown, config?: RequestConfig) => request<T>('PUT', path, body, config),
   patch: <T>(path: string, body?: unknown, config?: RequestConfig) => request<T>('PATCH', path, body, config),
   delete: <T = void>(path: string, config?: RequestConfig) => request<T>('DELETE', path, undefined, config),
+  download,
 };
 
 export default api;

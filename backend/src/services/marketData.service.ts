@@ -2,6 +2,7 @@ import { MockMarketDataProvider, StockQuote, StockFundamentalData } from './mark
 import { StockRepository, StockRow } from '../repositories/stock.repository';
 import { PriceHistoryRepository, PriceBar } from '../repositories/priceHistory.repository';
 import { AppError } from '../middleware/errorHandler';
+import type { ScreenerFilters } from '../validators/market.validator';
 
 export class MarketDataService {
   private static assertMockIsAllowed(): void {
@@ -82,25 +83,7 @@ export class MarketDataService {
   /**
    * Stock Screener with AND-combined filtering, sorting, and pagination.
    */
-  public static async screenStocks(filters: {
-    exchange?: string;
-    country?: string;
-    sector?: string;
-    minMarketCap?: number;
-    maxMarketCap?: number;
-    minPrice?: number;
-    maxPrice?: number;
-    minPe?: number;
-    maxPe?: number;
-    minDivYield?: number;
-    maxDivYield?: number;
-    minRsi?: number;
-    maxRsi?: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-    page?: number;
-    limit?: number;
-  }) {
+  public static async screenStocks(filters: ScreenerFilters) {
     this.assertMockIsAllowed();
     const allStocks = await StockRepository.findAll();
     let screened = allStocks.map((stock) => {
@@ -130,6 +113,7 @@ export class MarketDataService {
         sma200: fund.sma200,
         fiftyTwoWeekHigh: fund.fiftyTwoWeekHigh,
         fiftyTwoWeekLow: fund.fiftyTwoWeekLow,
+        yearPosition: yearPosition(quote.price, fund.fiftyTwoWeekLow, fund.fiftyTwoWeekHigh),
       };
     });
 
@@ -155,26 +139,44 @@ export class MarketDataService {
     if (filters.maxPe !== undefined) {
       screened = screened.filter(s => s.peRatio <= filters.maxPe!);
     }
+    if (filters.minEps !== undefined) screened = screened.filter(s => s.eps >= filters.minEps!);
+    if (filters.maxEps !== undefined) screened = screened.filter(s => s.eps <= filters.maxEps!);
     if (filters.minDivYield !== undefined) {
       screened = screened.filter(s => s.dividendYield >= filters.minDivYield!);
     }
+    if (filters.maxDivYield !== undefined) screened = screened.filter(s => s.dividendYield <= filters.maxDivYield!);
     if (filters.minMarketCap !== undefined) {
       screened = screened.filter(s => s.marketCap >= filters.minMarketCap!);
     }
+    if (filters.maxMarketCap !== undefined) screened = screened.filter(s => s.marketCap <= filters.maxMarketCap!);
+    if (filters.minRevenue !== undefined) screened = screened.filter(s => s.revenue >= filters.minRevenue!);
+    if (filters.maxRevenue !== undefined) screened = screened.filter(s => s.revenue <= filters.maxRevenue!);
+    if (filters.minProfit !== undefined) screened = screened.filter(s => s.profit >= filters.minProfit!);
+    if (filters.maxProfit !== undefined) screened = screened.filter(s => s.profit <= filters.maxProfit!);
+    if (filters.minDebt !== undefined) screened = screened.filter(s => s.debt >= filters.minDebt!);
+    if (filters.maxDebt !== undefined) screened = screened.filter(s => s.debt <= filters.maxDebt!);
+    if (filters.minVolume !== undefined) screened = screened.filter(s => s.volume >= filters.minVolume!);
+    if (filters.maxVolume !== undefined) screened = screened.filter(s => s.volume <= filters.maxVolume!);
     if (filters.minRsi !== undefined) {
       screened = screened.filter(s => s.rsi14 >= filters.minRsi!);
     }
     if (filters.maxRsi !== undefined) {
       screened = screened.filter(s => s.rsi14 <= filters.maxRsi!);
     }
+    if (filters.minYearPosition !== undefined) screened = screened.filter(s => s.yearPosition >= filters.minYearPosition!);
+    if (filters.maxYearPosition !== undefined) screened = screened.filter(s => s.yearPosition <= filters.maxYearPosition!);
+    if (filters.movingAverageRelation) {
+      screened = screened.filter(s => matchesMovingAverage(s, filters.movingAverageRelation!));
+    }
 
     // Sorting
     const sortBy = filters.sortBy || 'marketCap';
     const sortOrder = filters.sortOrder === 'asc' ? 1 : -1;
-    screened.sort((a: any, b: any) => {
+    screened.sort((a, b) => {
       const valA = a[sortBy] ?? 0;
       const valB = b[sortBy] ?? 0;
-      return (valA > valB ? 1 : valA < valB ? -1 : 0) * sortOrder;
+      if (typeof valA === 'string' && typeof valB === 'string') return valA.localeCompare(valB) * sortOrder;
+      return (Number(valA) - Number(valB)) * sortOrder;
     });
 
     // Pagination
@@ -192,5 +194,24 @@ export class MarketDataService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+}
+
+function yearPosition(price: number, low: number, high: number): number {
+  if (high <= low) return 0;
+  return Math.round(((price - low) / (high - low)) * 10000) / 100;
+}
+
+function matchesMovingAverage(
+  stock: { price: number; sma50: number; sma200: number },
+  relation: NonNullable<ScreenerFilters['movingAverageRelation']>,
+): boolean {
+  switch (relation) {
+    case 'ABOVE_50': return stock.price > stock.sma50;
+    case 'BELOW_50': return stock.price < stock.sma50;
+    case 'ABOVE_200': return stock.price > stock.sma200;
+    case 'BELOW_200': return stock.price < stock.sma200;
+    case 'GOLDEN_CROSS': return stock.sma50 > stock.sma200;
+    case 'DEATH_CROSS': return stock.sma50 < stock.sma200;
   }
 }

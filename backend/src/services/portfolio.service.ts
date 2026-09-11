@@ -3,13 +3,14 @@ import { MarketDataService } from './marketData.service';
 import { FXService } from './fx.service';
 import { AppError } from '../middleware/errorHandler';
 import { StockRepository } from '../repositories/stock.repository';
+import { db, IDatabaseExecutor } from '../database/db';
 
 export class PortfolioService {
   /**
    * Replays all portfolio transactions to compute cash balance and derived holdings.
    */
-  public static async calculateState(portfolioId: string | number, baseCurrency: string, syncHoldings = false) {
-    const transactions = await PortfolioRepository.getTransactions(portfolioId);
+  public static async calculateState(portfolioId: string | number, baseCurrency: string, syncHoldings = false, executor: IDatabaseExecutor = db) {
+    const transactions = await PortfolioRepository.getTransactions(portfolioId, executor);
 
     let cashBalance = 0;
     let totalDeposited = 0;
@@ -108,7 +109,7 @@ export class PortfolioService {
     for (const [stockId, data] of holdingsMap.entries()) {
       syncData.set(stockId, { quantity: data.quantity, avgCost: data.avgCost });
     }
-    if (syncHoldings) await PortfolioRepository.syncHoldings(portfolioId, syncData);
+    if (syncHoldings) await PortfolioRepository.syncHoldings(portfolioId, syncData, executor);
 
     return {
       cashBalance,
@@ -271,23 +272,31 @@ export class PortfolioService {
     if (transactionType === 'BUY' && amountBase + feeBase > state.cashBalance + 0.01) throw new AppError('Insufficient portfolio cash for this purchase', 409, 'INSUFFICIENT_CASH');
     if (transactionType === 'WITHDRAWAL' && amountBase + feeBase > state.cashBalance + 0.01) throw new AppError('Insufficient portfolio cash for this withdrawal', 409, 'INSUFFICIENT_CASH');
 
-    const tx = await PortfolioRepository.addTransaction({
-      portfolioId,
-      stockId: txData.stockId,
-      transactionType,
-      transactionDate: txData.transactionDate,
-      quantity: quantity || null,
-      price: price || null,
-      amount,
-      currency,
-      feeAmount,
-      fxRate,
-      notes: txData.notes,
+    return db.transaction(async executor => {
+      await executor.query('SELECT id FROM portfolios WHERE id = $1 AND user_id = $2 FOR UPDATE;', [portfolioId, userId]);
+      const lockedState = await this.calculateState(portfolioId, portfolio.base_currency, false, executor);
+      if (transactionType === 'SELL') {
+        const held = lockedState.holdingsMap.get(txData.stockId)?.quantity ?? 0;
+        if (quantity > held + 1e-8) throw new AppError('Cannot sell more shares than the portfolio holds', 409, 'INSUFFICIENT_HOLDINGS');
+      }
+      if (transactionType === 'BUY' && amountBase + feeBase > lockedState.cashBalance + 0.01) throw new AppError('Insufficient portfolio cash for this purchase', 409, 'INSUFFICIENT_CASH');
+      if (transactionType === 'WITHDRAWAL' && amountBase + feeBase > lockedState.cashBalance + 0.01) throw new AppError('Insufficient portfolio cash for this withdrawal', 409, 'INSUFFICIENT_CASH');
+      const tx = await PortfolioRepository.addTransaction({
+        portfolioId,
+        stockId: txData.stockId,
+        transactionType,
+        transactionDate: txData.transactionDate,
+        quantity: quantity || null,
+        price: price || null,
+        amount,
+        currency,
+        feeAmount,
+        fxRate,
+        notes: txData.notes,
+      }, executor);
+      await this.calculateState(portfolioId, portfolio.base_currency, true, executor);
+      return tx;
     });
-
-    // Replay state immediately
-    await this.calculateState(portfolioId, portfolio.base_currency, true);
-    return tx;
   }
 }
 

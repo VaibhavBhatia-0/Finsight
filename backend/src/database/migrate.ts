@@ -37,14 +37,10 @@ export async function runMigrations(client?: IDatabaseClient): Promise<string[]>
       const filePath = path.join(migrationsDir, file);
       const sql = fs.readFileSync(filePath, 'utf-8');
 
-      // Execute migration SQL using exec (multi-statement)
-      await dbClient.exec(sql);
-
-      // Record migration
-      await dbClient.query(
-        'INSERT INTO schema_migrations (filename) VALUES ($1)',
-        [file]
-      );
+      await dbClient.transaction(async executor => {
+        await executor.exec(sql);
+        await executor.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [file]);
+      });
 
       appliedMigrations.push(file);
       console.log(`[Migration] Successfully applied: ${file}`);

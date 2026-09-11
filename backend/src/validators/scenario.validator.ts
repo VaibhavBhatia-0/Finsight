@@ -15,6 +15,7 @@ export const scenarioSimulationSchema = z.object({
   baseCurrency: z.string().regex(/^[A-Z]{3}$/),
   benchmarkCode: z.string().trim().min(1).max(30).optional(),
   taxRuleId: z.coerce.number().int().positive().optional(),
+  taxJurisdiction: z.enum(['IN', 'US']).optional(),
   feeRate: z.coerce.number().min(0).max(0.1).optional(),
   contributionFrequency: z.enum(['MONTHLY', 'QUARTERLY', 'ANNUALLY']).optional(),
 }).passthrough().superRefine((value, context) => {
@@ -22,3 +23,7 @@ export const scenarioSimulationSchema = z.object({
   if (value.scenarioType === 'PORTFOLIO_SCENARIO' && !value.assets) context.addIssue({ code: z.ZodIssueCode.custom, path: ['assets'], message: 'Portfolio assets are required' });
   if (value.scenarioType !== 'PORTFOLIO_SCENARIO' && !value.stockId && !value.symbol) context.addIssue({ code: z.ZodIssueCode.custom, path: ['symbol'], message: 'A stock is required' });
 });
+
+export const scenarioComparisonSchema = z.object({
+  scenarioIds: z.array(z.coerce.number().int().positive()).min(2).max(20),
+}).refine(value => new Set(value.scenarioIds).size === value.scenarioIds.length, { path: ['scenarioIds'], message: 'Scenario IDs must be unique' });

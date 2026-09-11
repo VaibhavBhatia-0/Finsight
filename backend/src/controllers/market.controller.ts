@@ -3,6 +3,7 @@ import { MarketDataService } from '../services/marketData.service';
 import { FXService } from '../services/fx.service';
 import { StockRepository } from '../repositories/stock.repository';
 import { sendSuccess, sendError } from '../utils/response';
+import type { ScreenerFilters } from '../validators/market.validator';
 
 export class MarketController {
   static async getOverview(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -94,45 +95,7 @@ export class MarketController {
 
   static async screenStocks(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const {
-        exchange,
-        country,
-        sector,
-        minPrice,
-        maxPrice,
-        minPe,
-        maxPe,
-        minDivYield,
-        maxDivYield,
-        minMarketCap,
-        maxMarketCap,
-        minRsi,
-        maxRsi,
-        sortBy,
-        sortOrder,
-        page,
-        limit,
-      } = req.query;
-
-      const results = await MarketDataService.screenStocks({
-        exchange: exchange as string,
-        country: country as string,
-        sector: sector as string,
-        minPrice: minPrice ? parseFloat(minPrice as string) : undefined,
-        maxPrice: maxPrice ? parseFloat(maxPrice as string) : undefined,
-        minPe: minPe ? parseFloat(minPe as string) : undefined,
-        maxPe: maxPe ? parseFloat(maxPe as string) : undefined,
-        minDivYield: minDivYield ? parseFloat(minDivYield as string) : undefined,
-        maxDivYield: maxDivYield ? parseFloat(maxDivYield as string) : undefined,
-        minMarketCap: minMarketCap ? parseFloat(minMarketCap as string) : undefined,
-        maxMarketCap: maxMarketCap ? parseFloat(maxMarketCap as string) : undefined,
-        minRsi: minRsi ? parseFloat(minRsi as string) : undefined,
-        maxRsi: maxRsi ? parseFloat(maxRsi as string) : undefined,
-        sortBy: sortBy as string,
-        sortOrder: sortOrder as any,
-        page: page ? parseInt(page as string, 10) : 1,
-        limit: limit ? parseInt(limit as string, 10) : 20,
-      });
+      const results = await MarketDataService.screenStocks(req.query as unknown as ScreenerFilters);
 
       sendSuccess(res, results, 200, 'Synthetic', { source: 'FINSIGHT_DEVELOPMENT_FIXTURE', degraded: true });
     } catch (error) {

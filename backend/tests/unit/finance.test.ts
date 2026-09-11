@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AnalyticsService } from '../../src/services/analytics.service';
+import { calculateGoalProjection } from '../../src/services/finance.service';
 
 const basePayload = {
   base_currency: 'INR', asset_currency: 'USD', start_date: '2020-01-01', end_date: '2021-01-01',
@@ -24,6 +25,20 @@ describe('deterministic scenario calculations', () => {
     expect(value.attribution.asset_return_amount).toBe(1640);
     expect(value.attribution.fx_impact_amount).toBe(120);
     expect(value.attribution.dividend_amount).toBe(825);
+    expect(value.attribution.reconciliation_difference).toBe(0);
+  });
+
+  it('applies tax only to gains above the configured exemption', async () => {
+    const value = await AnalyticsService.runScript('simulations/simulator.py', {
+      ...basePayload,
+      mode: 'SINGLE_INVESTMENT',
+      tax_rate: 0.10,
+      tax_exemption: 500,
+      dividends: [{ ex_date: '2020-06-01', amount: 1 }],
+    });
+    expect(value.financials.gross_profit).toBe(2585);
+    expect(value.financials.estimated_tax).toBe(208.5);
+    expect(value.financials.net_profit).toBe(2376.5);
     expect(value.attribution.reconciliation_difference).toBe(0);
   });
 
@@ -66,5 +81,16 @@ describe('deterministic scenario calculations', () => {
     expect(value.financials.net_profit).toBe(80);
     expect(value.financials.net_return_percentage).toBe(8);
     expect(value.attribution.reconciliation_difference).toBe(0);
+  });
+});
+
+describe('deterministic savings goal projections', () => {
+  it('calculates monthly contribution rate and projected completion from exact fixtures', () => {
+    const value = calculateGoalProjection(
+      { currentAmount: 200, targetAmount: 1000, targetDate: '2026-05-15' },
+      [{ amount: 100, date: '2025-11-15' }, { amount: 100, date: '2025-12-15' }],
+      '2026-01-15',
+    );
+    expect(value).toEqual({ monthlyContributionRate: 100, monthsToGoal: 8, projectedCompletionDate: '2026-09-15', requiredMonthlyContribution: 200 });
   });
 });

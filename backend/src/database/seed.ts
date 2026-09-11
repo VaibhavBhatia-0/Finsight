@@ -35,8 +35,10 @@ export async function runSeeds(client?: IDatabaseClient): Promise<string[]> {
     const filePath = path.join(seedsDir, file);
     const sql = fs.readFileSync(filePath, 'utf-8');
 
-    await dbClient.exec(sql);
-    await dbClient.query('INSERT INTO schema_seeds (filename) VALUES ($1)', [file]);
+    await dbClient.transaction(async executor => {
+      await executor.exec(sql);
+      await executor.query('INSERT INTO schema_seeds (filename) VALUES ($1)', [file]);
+    });
     appliedSeeds.push(file);
     console.log(`[Seed] Successfully applied seed: ${file}`);
   }

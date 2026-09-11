@@ -10,7 +10,7 @@ const navItems = [
   { to: '/watchlist', label: 'Watchlist', icon: List },
   { to: '/portfolios', label: 'Portfolios', icon: FolderKanban },
   { to: '/lab', label: 'FinSight Lab', icon: Coins },
-  { to: '/finance/expenses', label: 'Finance', icon: Wallet },
+  { to: '/finance/transactions', label: 'Finance', icon: Wallet },
   { to: '/insights', label: 'Insights', icon: TrendingUp },
   { to: '/backtesting', label: 'Backtesting', icon: CreditCard },
   { to: '/settings', label: 'Settings', icon: Settings },

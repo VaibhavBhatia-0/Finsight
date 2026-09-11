@@ -1,22 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import api from '../api/client';
+import type { StockDetail } from '../api/contracts';
+import { endpoints } from '../api/endpoints';
 import FreshnessBadge from '../components/FreshnessBadge';
 import { Spinner } from '../components/Spinner';
-
-interface StockDetail {
-  stock: { symbol: string; company_name: string; currency: string; sector?: string };
-  quote: { price: number; changePercent: number; timestamp: string };
-  fundamentals: { marketCap: number; peRatio: number; eps: number; dividendYield: number };
-  dividends: Array<{ id: string; ex_date: string; amount: number }>;
-  corporateActions: Array<{ id: string; action_date: string; action_type: string; ratio: number }>;
-}
 
 export default function StockDetailPage() {
   const { symbol = '' } = useParams();
   const query = useQuery({
     queryKey: ['stock', symbol],
-    queryFn: async () => (await api.get<StockDetail>(`/api/v1/markets/stocks/${encodeURIComponent(symbol)}`)).data,
+    queryFn: async () => (await api.get<StockDetail>(endpoints.markets.stock(symbol))).data,
     enabled: Boolean(symbol),
   });
   if (query.isPending) return <Spinner />;

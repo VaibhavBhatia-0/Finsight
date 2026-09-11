@@ -13,9 +13,6 @@ export class WatchlistController {
       if (watchlists.length === 0) {
         // Create a default watchlist
         const defaultWl = await WatchlistRepository.create(userId, 'Main Watchlist');
-        // Add sample stocks
-        await WatchlistRepository.addItem(defaultWl.id, 1, userId); // RELIANCE
-        await WatchlistRepository.addItem(defaultWl.id, 5, userId); // NVDA
         watchlists = [defaultWl];
       }
 

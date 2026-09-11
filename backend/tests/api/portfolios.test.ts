@@ -44,7 +44,7 @@ describe('Portfolios & Watchlists API Integration Tests', () => {
 
   let portfolioId: string;
 
-  it('1. GET /api/v1/watchlists creates and returns default watchlist', async () => {
+  it('1. GET /api/v1/watchlists creates and returns an empty default watchlist', async () => {
     const res = await fetch(`${baseUrl}/api/v1/watchlists`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
@@ -53,7 +53,7 @@ describe('Portfolios & Watchlists API Integration Tests', () => {
     expect(res.status).toBe(200);
     expect(data.success).toBe(true);
     expect(data.data.length).toBeGreaterThan(0);
-    expect(data.data[0].items.length).toBeGreaterThan(0);
+    expect(data.data[0].items).toEqual([]);
     watchlistId = data.data[0].id;
   });
 

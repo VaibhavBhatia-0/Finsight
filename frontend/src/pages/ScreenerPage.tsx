@@ -4,74 +4,50 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Search, X, ArrowUp, ArrowDown, Plus } from "lucide-react";
 import api from "../api/client";
+import type { ScreenerResponse } from "../api/contracts";
+import { endpoints } from "../api/endpoints";
 import { FreshnessBadge } from "../components/FreshnessBadge";
 import { useWatchlist } from "../hooks/useWatchlist";
+import { useAuth } from "../hooks/useAuth";
 
-interface Stock {
-  id: string;
-  symbol: string;
-  name: string;
-  exchange: string;
-  country: string;
-  sector: string;
-  marketCap: number;
-  price: number;
-  peRatio: number | null;
-  eps: number | null;
-  dividendYield: number | null;
-  revenue: number | null;
-  profit: number | null;
-  debt: number | null;
-  rsi: number | null;
-  movingAverage: number | null;
-  volume: number | null;
-  week52Low: number | null;
-  week52High: number | null;
-}
+type NumericFilterKey = 'minMarketCap' | 'maxMarketCap' | 'minPrice' | 'maxPrice' | 'minPe' | 'maxPe' | 'minEps' | 'maxEps' | 'minDivYield' | 'maxDivYield' | 'minRevenue' | 'maxRevenue' | 'minProfit' | 'maxProfit' | 'minDebt' | 'maxDebt' | 'minVolume' | 'maxVolume' | 'minRsi' | 'maxRsi' | 'minYearPosition' | 'maxYearPosition';
+type ScreenerSort = 'symbol' | 'price' | 'marketCap' | 'peRatio' | 'eps' | 'dividendYield' | 'volume' | 'rsi14' | 'yearPosition';
 
-interface ScreenerResult {
-  items: Stock[];
-  pagination: { page: number; limit: number; total: number; totalPages: number };
-}
-
-const buildQueryParams = (filters: Record<string, any>) => {
-  const params = new URLSearchParams();
-  Object.entries(filters).forEach(([k, v]) => {
-    if (v !== "" && v != null) params.append(k, String(v));
-  });
-  return params.toString();
+const numericDefaults: Record<NumericFilterKey, string> = {
+  minMarketCap: '', maxMarketCap: '', minPrice: '', maxPrice: '', minPe: '', maxPe: '',
+  minEps: '', maxEps: '', minDivYield: '', maxDivYield: '', minRevenue: '', maxRevenue: '',
+  minProfit: '', maxProfit: '', minDebt: '', maxDebt: '', minVolume: '', maxVolume: '',
+  minRsi: '', maxRsi: '', minYearPosition: '', maxYearPosition: '',
 };
+
+const rangeFields: Array<{ label: string; min: NumericFilterKey; max: NumericFilterKey; step?: string; minValue?: number; maxValue?: number }> = [
+  { label: 'Price', min: 'minPrice', max: 'maxPrice', step: '0.01', minValue: 0 },
+  { label: 'Market cap', min: 'minMarketCap', max: 'maxMarketCap', minValue: 0 },
+  { label: 'P/E ratio', min: 'minPe', max: 'maxPe', step: '0.01' },
+  { label: 'EPS', min: 'minEps', max: 'maxEps', step: '0.01' },
+  { label: 'Dividend yield (%)', min: 'minDivYield', max: 'maxDivYield', step: '0.01' },
+  { label: 'Revenue', min: 'minRevenue', max: 'maxRevenue', minValue: 0 },
+  { label: 'Profit', min: 'minProfit', max: 'maxProfit' },
+  { label: 'Debt', min: 'minDebt', max: 'maxDebt', minValue: 0 },
+  { label: 'Volume', min: 'minVolume', max: 'maxVolume', minValue: 0 },
+  { label: 'RSI', min: 'minRsi', max: 'maxRsi', step: '0.01', minValue: 0, maxValue: 100 },
+  { label: '52-week position (%)', min: 'minYearPosition', max: 'maxYearPosition', step: '0.01', minValue: 0, maxValue: 100 },
+];
 
 export const ScreenerPage: React.FC = () => {
   const navigate = useNavigate();
-  const watchlist = useWatchlist();
+  const { user } = useAuth();
+  const watchlist = useWatchlist(Boolean(user));
 
   // Filter state
   const [exchange, setExchange] = useState("");
   const [country, setCountry] = useState("");
   const [sector, setSector] = useState("");
-  const [marketCapMin, setMarketCapMin] = useState("");
-  const [marketCapMax, setMarketCapMax] = useState("");
-  const [priceMin, setPriceMin] = useState("");
-  const [priceMax, setPriceMax] = useState("");
-  const [peMin, setPeMin] = useState("");
-  const [peMax, setPeMax] = useState("");
-  const [epsMin, setEpsMin] = useState("");
-  const [epsMax, setEpsMax] = useState("");
-  const [divYieldMin, setDivYieldMin] = useState("");
-  const [divYieldMax, setDivYieldMax] = useState("");
-  const [revenueMin, setRevenueMin] = useState("");
-  const [revenueMax, setRevenueMax] = useState("");
-  const [profitMin, setProfitMin] = useState("");
-  const [profitMax, setProfitMax] = useState("");
-  const [debtMin, setDebtMin] = useState("");
-  const [debtMax, setDebtMax] = useState("");
-  const [rsiMin, setRsiMin] = useState("");
-  const [rsiMax, setRsiMax] = useState("");
-  const [maRelation, setMaRelation] = useState("");
+  const [numericFilters, setNumericFilters] = useState(numericDefaults);
+  const [movingAverageRelation, setMovingAverageRelation] = useState('');
 
   // Sorting & pagination state
-  const [sortField, setSortField] = useState<string>("symbol");
+  const [sortField, setSortField] = useState<ScreenerSort>("symbol");
   const [sortDesc, setSortDesc] = useState<boolean>(false);
   const [page, setPage] = useState<number>(1);
   const pageSize = 20;
@@ -80,62 +56,27 @@ export const ScreenerPage: React.FC = () => {
     exchange,
     country,
     sector,
-    marketCapMin,
-    marketCapMax,
-    priceMin,
-    priceMax,
-    peMin,
-    peMax,
-    epsMin,
-    epsMax,
-    divYieldMin,
-    divYieldMax,
-    revenueMin,
-    revenueMax,
-    profitMin,
-    profitMax,
-    debtMin,
-    debtMax,
-    rsiMin,
-    rsiMax,
-    maRelation,
+    ...numericFilters,
+    movingAverageRelation,
     sortBy: sortField,
-    sortDesc: sortDesc ? "1" : "0",
+    sortOrder: sortDesc ? 'desc' : 'asc',
     page,
-    pageSize,
+    limit: pageSize,
   }), [
     exchange,
     country,
     sector,
-    marketCapMin,
-    marketCapMax,
-    priceMin,
-    priceMax,
-    peMin,
-    peMax,
-    epsMin,
-    epsMax,
-    divYieldMin,
-    divYieldMax,
-    revenueMin,
-    revenueMax,
-    profitMin,
-    profitMax,
-    debtMin,
-    debtMax,
-    rsiMin,
-    rsiMax,
-    maRelation,
+    numericFilters,
+    movingAverageRelation,
     sortField,
     sortDesc,
     page,
   ]);
 
-  const { data, isLoading, isError, error } = useQuery<ScreenerResult>({
+  const { data, isLoading, isError, error } = useQuery<ScreenerResponse>({
     queryKey: ["stocks", filters],
     queryFn: async () => {
-      const qs = buildQueryParams(filters);
-      const resp = await api.get<ScreenerResult>(`/api/v1/markets/screener?${qs}`);
+      const resp = await api.get<ScreenerResponse>(endpoints.markets.screener, { params: filters });
       return resp.data;
     },
   });
@@ -144,31 +85,14 @@ export const ScreenerPage: React.FC = () => {
     setExchange("");
     setCountry("");
     setSector("");
-    setMarketCapMin("");
-    setMarketCapMax("");
-    setPriceMin("");
-    setPriceMax("");
-    setPeMin("");
-    setPeMax("");
-    setEpsMin("");
-    setEpsMax("");
-    setDivYieldMin("");
-    setDivYieldMax("");
-    setRevenueMin("");
-    setRevenueMax("");
-    setProfitMin("");
-    setProfitMax("");
-    setDebtMin("");
-    setDebtMax("");
-    setRsiMin("");
-    setRsiMax("");
-    setMaRelation("");
+    setNumericFilters(numericDefaults);
+    setMovingAverageRelation('');
     setPage(1);
     setSortField("symbol");
     setSortDesc(false);
   };
 
-  const toggleSort = (field: string) => {
+  const toggleSort = (field: ScreenerSort) => {
     if (sortField === field) setSortDesc(!sortDesc);
     else {
       setSortField(field);
@@ -221,7 +145,27 @@ export const ScreenerPage: React.FC = () => {
             placeholder="e.g. Technology"
           />
         </div>
-        {/* Additional filters can be added here */}
+        {rangeFields.map(field => (
+          <fieldset key={field.label} className="rounded border p-2">
+            <legend className="px-1 text-sm font-medium">{field.label}</legend>
+            <div className="grid grid-cols-2 gap-2">
+              <input aria-label={`Minimum ${field.label}`} type="number" placeholder="Min" value={numericFilters[field.min]} min={field.minValue} max={field.maxValue} step={field.step ?? '1'} onChange={event => setNumericFilters(current => ({ ...current, [field.min]: event.target.value }))} className="min-w-0 rounded border px-2 py-1" />
+              <input aria-label={`Maximum ${field.label}`} type="number" placeholder="Max" value={numericFilters[field.max]} min={field.minValue} max={field.maxValue} step={field.step ?? '1'} onChange={event => setNumericFilters(current => ({ ...current, [field.max]: event.target.value }))} className="min-w-0 rounded border px-2 py-1" />
+            </div>
+          </fieldset>
+        ))}
+        <div className="flex flex-col">
+          <label htmlFor="moving-average" className="text-sm font-medium mb-1">Moving-average relation</label>
+          <select id="moving-average" value={movingAverageRelation} onChange={event => setMovingAverageRelation(event.target.value)} className="rounded border px-2 py-1">
+            <option value="">Any</option>
+            <option value="ABOVE_50">Price above SMA 50</option>
+            <option value="BELOW_50">Price below SMA 50</option>
+            <option value="ABOVE_200">Price above SMA 200</option>
+            <option value="BELOW_200">Price below SMA 200</option>
+            <option value="GOLDEN_CROSS">SMA 50 above SMA 200</option>
+            <option value="DEATH_CROSS">SMA 50 below SMA 200</option>
+          </select>
+        </div>
       </section>
       <div className="flex space-x-2 mb-4">
         <button
@@ -232,7 +176,7 @@ export const ScreenerPage: React.FC = () => {
         </button>
       </div>
       {isLoading && <p className="text-center py-8" role="status">Loading stocks…</p>}
-      {isError && <p className="text-center text-red-600 py-8" role="alert">Error loading stocks: {(error as Error).message}</p>}
+      {isError && <p className="text-center text-red-600 py-8" role="alert">Error loading stocks: {error.message}</p>}
       {!isLoading && data && data.items.length === 0 && <p className="text-center py-8" role="status">No stocks match the current filters.</p>}
       {!isLoading && data && data.items.length > 0 && (
         <div className="overflow-x-auto">
@@ -244,7 +188,12 @@ export const ScreenerPage: React.FC = () => {
                 <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("price")}>Price {sortField === "price" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
                 <th className="px-4 py-2 text-left">Exchange</th>
                 <th className="px-4 py-2 text-left">Sector</th>
-                <th className="px-4 py-2 text-left">Market Cap</th>
+                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("marketCap")}>Market Cap {sortField === "marketCap" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
+                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("peRatio")}>P/E {sortField === "peRatio" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
+                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("eps")}>EPS {sortField === "eps" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
+                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("dividendYield")}>Yield {sortField === "dividendYield" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
+                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("rsi14")}>RSI {sortField === "rsi14" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
+                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("yearPosition")}>52-week position {sortField === "yearPosition" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
                 <th className="px-4 py-2 text-left">Freshness</th>
                 <th className="px-4 py-2 text-left">Watchlist</th>
               </tr>
@@ -258,9 +207,14 @@ export const ScreenerPage: React.FC = () => {
                   <td className="px-4 py-2">{stock.exchange}</td>
                   <td className="px-4 py-2">{stock.sector}</td>
                   <td className="px-4 py-2">{Intl.NumberFormat("en-US", { notation: "compact" }).format(stock.marketCap)}</td>
+                  <td className="px-4 py-2">{stock.peRatio.toFixed(2)}</td>
+                  <td className="px-4 py-2">{stock.eps.toFixed(2)}</td>
+                  <td className="px-4 py-2">{stock.dividendYield.toFixed(2)}%</td>
+                  <td className="px-4 py-2">{stock.rsi14.toFixed(2)}</td>
+                  <td className="px-4 py-2">{stock.yearPosition.toFixed(2)}%</td>
                   <td className="px-4 py-2"><FreshnessBadge freshness="Synthetic" /></td>
                   <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => watchlist.addToWatchlist(stock.id)} className="text-primary hover:text-primary-dark" aria-label={`Add ${stock.symbol} to watchlist`}>
+                    <button onClick={() => user ? watchlist.addToWatchlist(stock.id) : navigate('/login')} className="text-primary hover:text-primary-dark" aria-label={`Add ${stock.symbol} to watchlist`}>
                       <Plus size={16} aria-hidden="true" />
                     </button>
                   </td>

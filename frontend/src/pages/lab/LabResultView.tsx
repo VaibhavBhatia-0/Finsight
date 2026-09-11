@@ -2,24 +2,15 @@
 import React from "react";
 import { FreshnessBadge } from "../../components/FreshnessBadge";
 import { Loader2 } from "lucide-react";
+import type { ScenarioResult } from "../../api/contracts";
 
 /**
  * A reusable component to display backtest / simulation results.
  * It expects a result object that may contain various financial metrics.
  * Only the metrics that exist on the object will be rendered.
  */
-export interface LabResult {
-  mode?: string;
-  financials?: Record<string, number>;
-  attribution?: Record<string, number>;
-  risk_metrics?: Record<string, number | null>;
-  assumptions?: string | string[];
-  freshness?: 'Live' | 'Delayed' | 'End-of-day' | 'Historical' | 'Static' | 'Synthetic';
-  timestamp?: string;
-}
-
 interface Props {
-  result: LabResult | null;
+  result: ScenarioResult | null;
   isLoading?: boolean;
   isError?: boolean;
   error?: Error;
@@ -69,12 +60,9 @@ export const LabResultView: React.FC<Props> = ({ result, isLoading, isError, err
           <p className="mt-2 whitespace-pre-wrap text-sm">{Array.isArray(result.assumptions) ? result.assumptions.join('\n') : result.assumptions}</p>
         </details>
       )}
+      {result.taxMethodology && <details className="mt-4"><summary className="cursor-pointer text-indigo-600 underline">Tax estimate methodology</summary><dl className="mt-2 grid gap-1 text-sm"><div><dt className="inline font-medium">Applied: </dt><dd className="inline">{result.taxMethodology.applied ? 'Yes' : 'No'}</dd></div><div><dt className="inline font-medium">Method: </dt><dd className="inline">{result.taxMethodology.methodology.replace(/_/g, ' ')}</dd></div><div><dt className="inline font-medium">Holding period: </dt><dd className="inline">{result.taxMethodology.holdingPeriodDays} days</dd></div>{result.taxMethodology.applied && <><div><dt className="inline font-medium">Rule: </dt><dd className="inline">{result.taxMethodology.jurisdiction} {result.taxMethodology.taxType} at {(result.taxMethodology.rate * 100).toFixed(2)}%</dd></div><div><dt className="inline font-medium">Exemption: </dt><dd className="inline">{result.taxMethodology.exemptionAmount.toLocaleString()}</dd></div><div><dt className="inline font-medium">Source: </dt><dd className="inline">{result.taxMethodology.sourceReference}</dd></div></>}<p className="mt-2">{result.taxMethodology.disclaimer}</p></dl></details>}
       {/* Freshness badge */}
-      {result.freshness && (
-        <div className="mt-2">
-          <FreshnessBadge freshness={result.freshness} timestamp={result.timestamp} />
-        </div>
-      )}
+      <div className="mt-2"><FreshnessBadge freshness="Synthetic" /></div>
       {/* Disclaimer */}
       <p className="mt-4 text-xs text-gray-600 italic">
         The information provided is for educational purposes only and does not constitute financial advice.

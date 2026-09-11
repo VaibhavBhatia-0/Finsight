@@ -1,4 +1,4 @@
-import { db } from '../database/db';
+import { db, IDatabaseExecutor } from '../database/db';
 
 export class ScenarioRepository {
   static async create(userId: string, data: {
@@ -12,8 +12,8 @@ export class ScenarioRepository {
     taxRuleId?: string | number | null;
     benchmarkId?: string | number | null;
     assumptions?: any;
-  }): Promise<any> {
-    const res = await db.query(`
+  }, executor: IDatabaseExecutor = db): Promise<any> {
+    const res = await executor.query(`
       INSERT INTO scenarios (
         user_id, name, scenario_type, base_currency, start_date, end_date,
         initial_amount, contribution_frequency, tax_rule_id, benchmark_id, assumptions
@@ -35,18 +35,20 @@ export class ScenarioRepository {
     return res.rows[0];
   }
 
-  static async addAsset(scenarioId: string | number, stockId: string | number, targetWeight?: number, initialAmount?: number): Promise<void> {
-    await db.query(`
+  static async addAsset(scenarioId: string | number, stockId: string | number, targetWeight?: number, initialAmount?: number, executor: IDatabaseExecutor = db): Promise<{ id: string }> {
+    const result = await executor.query<{ id: string }>(`
       INSERT INTO scenario_assets (scenario_id, stock_id, target_weight, initial_amount)
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (scenario_id, stock_id) DO UPDATE
       SET target_weight = EXCLUDED.target_weight,
-          initial_amount = EXCLUDED.initial_amount;
+          initial_amount = EXCLUDED.initial_amount
+      RETURNING id;
     `, [scenarioId, stockId, targetWeight ?? null, initialAmount ?? null]);
+    return result.rows[0];
   }
 
-  static async saveResult(scenarioId: string | number, result: any): Promise<any> {
-    const res = await db.query(`
+  static async saveResult(scenarioId: string | number, result: any, executor: IDatabaseExecutor = db): Promise<any> {
+    const res = await executor.query(`
       INSERT INTO simulation_results (
         scenario_id, initial_value, final_value, gross_value, gross_profit,
         net_value, net_profit, dividends, fees, estimated_tax, fx_impact,
@@ -78,6 +80,32 @@ export class ScenarioRepository {
       JSON.stringify(result.attribution || {}),
     ]);
     return res.rows[0];
+  }
+
+  static async addContribution(
+    scenarioId: string | number,
+    scenarioAssetId: string | number,
+    contribution: { date: string; amount: number; currency: string },
+    executor: IDatabaseExecutor = db,
+  ): Promise<void> {
+    await executor.query(`
+      INSERT INTO scenario_contributions (scenario_id, scenario_asset_id, contribution_date, amount, currency)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (scenario_id, contribution_date, scenario_asset_id) DO UPDATE
+      SET amount = EXCLUDED.amount, currency = EXCLUDED.currency;
+    `, [scenarioId, scenarioAssetId, contribution.date, contribution.amount, contribution.currency]);
+  }
+
+  static async addComparison(
+    scenarioId: string | number,
+    comparedScenarioId: string | number,
+    executor: IDatabaseExecutor = db,
+  ): Promise<void> {
+    await executor.query(`
+      INSERT INTO scenario_comparisons (scenario_id, compared_scenario_id)
+      VALUES ($1, $2)
+      ON CONFLICT (scenario_id, compared_scenario_id) DO NOTHING;
+    `, [scenarioId, comparedScenarioId]);
   }
 
   static async findByUserId(userId: string): Promise<any[]> {
@@ -126,9 +154,26 @@ export class ScenarioRepository {
       LIMIT 1;
     `, [id]);
 
+    const contributionsRes = await db.query(`
+      SELECT sc.*, sa.stock_id
+      FROM scenario_contributions sc
+      LEFT JOIN scenario_assets sa ON sc.scenario_asset_id = sa.id
+      WHERE sc.scenario_id = $1
+      ORDER BY sc.contribution_date ASC, sc.id ASC;
+    `, [id]);
+
+    const comparisonsRes = await db.query<{ scenario_id: string }>(`
+      SELECT CASE WHEN scenario_id = $1 THEN compared_scenario_id ELSE scenario_id END AS scenario_id
+      FROM scenario_comparisons
+      WHERE scenario_id = $1 OR compared_scenario_id = $1
+      ORDER BY created_at ASC, id ASC;
+    `, [id]);
+
     return {
       ...scenario,
       assets: assetsRes.rows,
+      contributions: contributionsRes.rows,
+      comparisonIds: comparisonsRes.rows.map(row => row.scenario_id),
       result: resultRes.rows[0] || null,
     };
   }
@@ -137,4 +182,3 @@ export class ScenarioRepository {
     await db.query(`DELETE FROM scenarios WHERE id = $1 AND user_id = $2;`, [id, userId]);
   }
 }
-

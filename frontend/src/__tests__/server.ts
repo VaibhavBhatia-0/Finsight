@@ -17,16 +17,6 @@ export const handlers = [
     { id: '1', name: 'Emergency Fund', target_amount: '5000', current_amount: '1000', target_date: '2025-01-01' },
     { id: '2', name: 'Car', target_amount: '10000', current_amount: '2500', target_date: '2026-01-01' },
   ]))),
-  http.get('http://localhost/api/v1/finance/savings', () => HttpResponse.json(envelope([
-    { id: 1, name: 'Savings Account', balance: 3000 },
-    { id: 2, name: 'Investment', balance: 12000 },
-  ]))),
-  http.get('http://localhost/api/v1/reports/export-csv', () => new HttpResponse('id,name\n1,Test', {
-    headers: { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="report.csv"' },
-  })),
-  http.get('http://localhost/api/v1/reports/export-pdf', () => new HttpResponse(new Uint8Array([37, 80, 68, 70]), {
-    headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="report.pdf"' },
-  })),
 ];
 
 export const server = setupServer(...handlers);

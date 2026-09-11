@@ -1,4 +1,4 @@
-import { db } from '../database/db';
+import { db, IDatabaseExecutor } from '../database/db';
 
 export interface UserRow {
   id: string;
@@ -8,6 +8,9 @@ export interface UserRow {
   base_currency: string;
   created_at: string;
   updated_at: string;
+  email_verified_at: string | null;
+  auth_version: number;
+  google_subject: string | null;
 }
 
 export class UserRepository {
@@ -17,8 +20,8 @@ export class UserRepository {
     passwordHash: string;
     name?: string;
     baseCurrency?: string;
-  }): Promise<UserRow> {
-    const res = await db.query<UserRow>(
+  }, executor: IDatabaseExecutor = db): Promise<UserRow> {
+    const res = await executor.query<UserRow>(
       `INSERT INTO users (id, email, password_hash, name, base_currency)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *;`,
@@ -48,5 +51,24 @@ export class UserRepository {
     );
     return res.rows[0] || null;
   }
-}
 
+  static async markEmailVerified(id: string, executor: IDatabaseExecutor = db): Promise<UserRow | null> {
+    const result = await executor.query<UserRow>('UPDATE users SET email_verified_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;', [id]);
+    return result.rows[0] || null;
+  }
+
+  static async updatePassword(id: string, passwordHash: string, executor: IDatabaseExecutor = db): Promise<UserRow | null> {
+    const result = await executor.query<UserRow>('UPDATE users SET password_hash = $1, auth_version = auth_version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *;', [passwordHash, id]);
+    return result.rows[0] || null;
+  }
+
+  static async findByGoogleSubject(subject: string): Promise<UserRow | null> {
+    const result = await db.query<UserRow>('SELECT * FROM users WHERE google_subject = $1;', [subject]);
+    return result.rows[0] || null;
+  }
+
+  static async linkGoogle(id: string, subject: string, executor: IDatabaseExecutor = db): Promise<UserRow | null> {
+    const result = await executor.query<UserRow>('UPDATE users SET google_subject = $1, email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *;', [subject, id]);
+    return result.rows[0] || null;
+  }
+}

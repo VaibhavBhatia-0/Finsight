@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import AuthShell, { buttonClass, inputClass } from './AuthShell';
+import GoogleSignInButton from './GoogleSignInButton';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -27,9 +28,11 @@ export default function LoginPage() {
       <form className="space-y-4" onSubmit={submit}>
         <label className="block text-sm">Email<input className={inputClass} name="email" type="email" autoComplete="email" required /></label>
         <label className="block text-sm">Password<input className={inputClass} name="password" type="password" autoComplete="current-password" required /></label>
+        <div className="flex justify-between text-sm"><Link className="text-gold-700" to="/forgot-password">Forgot password?</Link><Link className="text-gold-700" to="/verify-email">Verify email</Link></div>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         <button className={buttonClass} disabled={submitting}>{submitting ? 'Signing in…' : 'Sign in'}</button>
       </form>
+      <GoogleSignInButton />
     </AuthShell>
   );
 }

@@ -18,13 +18,16 @@ describe('PostgreSQL Database Schema & Migration Verification', () => {
     }
   });
 
-  it('1. Executes 001_initial_schema.sql migration cleanly against real PostgreSQL engine', async () => {
-    const migrationPath = path.resolve(__dirname, '../../../database/migrations/001_initial_schema.sql');
-    const sql = fs.readFileSync(migrationPath, 'utf-8');
-    await expect(pg.exec(sql)).resolves.toBeDefined();
+  it('1. Executes the ordered migration set cleanly against a real PostgreSQL engine', async () => {
+    const migrationsPath = path.resolve(__dirname, '../../../database/migrations');
+    const files = fs.readdirSync(migrationsPath).filter(file => file.endsWith('.sql')).sort();
+    for (const file of files) {
+      const sql = fs.readFileSync(path.join(migrationsPath, file), 'utf-8');
+      await expect(pg.exec(sql), `Migration ${file} should execute`).resolves.toBeDefined();
+    }
   });
 
-  it('2. Confirms all 26 distinct entity tables exist in PostgreSQL information_schema', async () => {
+  it('2. Confirms all 30 distinct entity tables exist in PostgreSQL information_schema', async () => {
     const res = await pg.query<{ table_name: string }>(`
       SELECT table_name 
       FROM information_schema.tables 
@@ -58,11 +61,15 @@ describe('PostgreSQL Database Schema & Migration Verification', () => {
       'backtests',
       'backtest_results',
       'finance_transactions',
+      'finance_recurring_rules',
       'budgets',
       'savings_goals',
+      'savings_goal_contributions',
+      'auth_action_tokens',
+      'oauth_states',
     ];
 
-    expect(expectedEntities.length).toBe(26);
+    expect(expectedEntities.length).toBe(30);
     for (const table of expectedEntities) {
       expect(tableNames, `Table ${table} should exist in database`).toContain(table);
     }

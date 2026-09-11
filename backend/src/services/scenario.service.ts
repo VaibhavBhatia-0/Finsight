@@ -5,6 +5,8 @@ import { FXService } from './fx.service';
 import { AnalyticsService } from './analytics.service';
 import { db } from '../database/db';
 import { AppError } from '../middleware/errorHandler';
+import { TaxService } from './tax.service';
+import { UserPreferencesRepository } from '../repositories/userPreferences.repository';
 
 export class ScenarioService {
   /**
@@ -20,6 +22,7 @@ export class ScenarioService {
     baseCurrency: string;
     benchmarkCode?: string;
     taxRuleId?: string | number;
+    taxJurisdiction?: 'IN' | 'US';
     feeRate?: number;
     contributionFrequency?: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
     assets?: Array<{ stockId?: string | number; symbol?: string; weight: number }>;
@@ -40,14 +43,7 @@ export class ScenarioService {
       }
     }
 
-    // Fetch tax rule if applicable
-    let taxRate = 0.125; // default 12.5% LTCG
-    if (input.taxRuleId) {
-      const taxRes = await db.query(`SELECT rate FROM tax_rules WHERE id = $1;`, [input.taxRuleId]);
-      if (taxRes.rows.length > 0 && taxRes.rows[0].rate) {
-        taxRate = parseFloat(taxRes.rows[0].rate);
-      }
-    }
+    const tax = await TaxService.resolve({ jurisdiction: input.taxJurisdiction, taxRuleId: input.taxRuleId, assetType: 'EQUITY', acquisitionDate: input.startDate, disposalDate: input.endDate });
 
     const payload = {
       mode,
@@ -57,7 +53,8 @@ export class ScenarioService {
       end_date: input.endDate,
       benchmark_price_history: benchmarkPrices,
       fee_rate: input.feeRate ?? 0.001,
-      tax_rate: taxRate,
+      tax_rate: tax.rate,
+      tax_exemption: tax.exemptionAmount,
       contribution_frequency: input.contributionFrequency || 'MONTHLY',
     };
 
@@ -67,13 +64,14 @@ export class ScenarioService {
       if (input.assets.some(asset => !(Number(asset.weight) > 0)) || Math.abs(weightTotal - 1) > 1e-8) throw new AppError('Portfolio weights must be positive and sum to 1', 400, 'INVALID_PORTFOLIO_WEIGHTS');
       const preparedAssets = await Promise.all(input.assets.map(asset => this.prepareAsset(asset, input)));
       const simulationResult = await AnalyticsService.runScript('simulations/simulator.py', { ...payload, assets: preparedAssets.map(({ stock: _stock, ...data }) => data) });
-      return { assets: preparedAssets.map(({ stock, weight }) => ({ ...stock, weight })), ...simulationResult };
+      const { assets: assetResults, ...portfolioResult } = simulationResult;
+      return { ...portfolioResult, taxMethodology: tax, assets: preparedAssets.map(({ stock, weight }) => ({ ...stock, weight })), assetResults };
     }
 
     const prepared = await this.prepareAsset({ stockId: input.stockId, symbol: input.symbol, weight: 1 }, input);
     const { stock, weight: _weight, ...assetPayload } = prepared;
     const simulationResult = await AnalyticsService.runScript('simulations/simulator.py', { ...payload, ...assetPayload });
-    return { stock, ...simulationResult };
+    return { stock, taxMethodology: tax, ...simulationResult };
   }
 
   private static async prepareAsset(
@@ -128,35 +126,101 @@ export class ScenarioService {
    * Saves a scenario and its simulation results.
    */
   public static async saveScenario(userId: string, data: any) {
+    if (!data.taxJurisdiction && !data.taxRuleId) {
+      const preferences = await UserPreferencesRepository.getByUserId(userId);
+      if (preferences?.tax_residency) data = { ...data, taxJurisdiction: preferences.tax_residency };
+    }
     // 1. Run simulation to get fresh computed results
     const simulationResult = await this.runSimulation(data);
 
-    // 2. Insert into scenarios table
-    const scenario = await ScenarioRepository.create(userId, {
-      name: data.name || `${data.symbol} Simulation`,
-      scenarioType: data.scenarioType || 'SINGLE_INVESTMENT',
-      baseCurrency: data.baseCurrency || 'INR',
-      startDate: data.startDate,
-      endDate: data.endDate,
-      initialAmount: data.initialAmount,
-      contributionFrequency: data.contributionFrequency,
-      taxRuleId: data.taxRuleId,
-      benchmarkId: data.benchmarkId,
-      assumptions: data.assumptions,
+    return db.transaction(async executor => {
+      // Persist the scenario, resolved assets, recurring ledger, and result as one unit.
+      const scenario = await ScenarioRepository.create(userId, {
+        name: data.name || `${data.symbol || data.scenarioType} Simulation`,
+        scenarioType: data.scenarioType || 'SINGLE_INVESTMENT',
+        baseCurrency: data.baseCurrency || 'INR',
+        startDate: data.startDate,
+        endDate: data.endDate,
+        initialAmount: data.initialAmount,
+        contributionFrequency: data.contributionFrequency,
+        taxRuleId: data.taxRuleId,
+        benchmarkId: data.benchmarkId,
+        assumptions: data.assumptions,
+      }, executor);
+
+      if (data.scenarioType === 'PORTFOLIO_SCENARIO' && Array.isArray(simulationResult.assets)) {
+        for (const asset of simulationResult.assets) {
+          await ScenarioRepository.addAsset(scenario.id, asset.id, asset.weight, data.initialAmount * asset.weight, executor);
+        }
+      } else if (simulationResult.stock?.id) {
+        const scenarioAsset = await ScenarioRepository.addAsset(scenario.id, simulationResult.stock.id, 1.0, data.initialAmount, executor);
+        if (data.scenarioType === 'RECURRING_INVESTMENT' && Array.isArray(simulationResult.contributions)) {
+          for (const contribution of simulationResult.contributions) {
+            await ScenarioRepository.addContribution(scenario.id, scenarioAsset.id, {
+              date: String(contribution.trade_date),
+              amount: Number(contribution.amount),
+              currency: data.baseCurrency,
+            }, executor);
+          }
+        }
+      }
+
+      const savedResult = await ScenarioRepository.saveResult(scenario.id, simulationResult, executor);
+      return { scenario, result: savedResult, simulation: simulationResult };
     });
+  }
 
-    // 3. Insert scenario asset
-    if (data.stockId) {
-      await ScenarioRepository.addAsset(scenario.id, data.stockId, 1.0, data.initialAmount);
+  public static async compareScenarios(userId: string, scenarioIds: Array<string | number>) {
+    const uniqueIds = [...new Set(scenarioIds.map(String))];
+    const scenarios = await Promise.all(uniqueIds.map(id => ScenarioRepository.findById(id, userId)));
+    if (scenarios.some(scenario => !scenario)) {
+      throw new AppError('One or more scenarios were not found', 404, 'SCENARIO_NOT_FOUND');
     }
-
-    // 4. Save result
-    const savedResult = await ScenarioRepository.saveResult(scenario.id, simulationResult);
-
+    await db.transaction(async executor => {
+      const anchor = uniqueIds[0];
+      for (const compared of uniqueIds.slice(1)) {
+        await ScenarioRepository.addComparison(anchor, compared, executor);
+      }
+    });
+    const comparisonRows = scenarios.map(scenario => ({
+      ...scenario,
+      final_value: scenario.result?.final_value ?? null,
+      net_profit: scenario.result?.net_profit ?? null,
+      return_percentage: scenario.result?.return_percentage ?? null,
+      cagr: scenario.result?.cagr ?? null,
+      xirr: scenario.result?.xirr ?? null,
+      volatility: scenario.result?.volatility ?? null,
+      sharpe_ratio: scenario.result?.sharpe_ratio ?? null,
+      max_drawdown: scenario.result?.max_drawdown ?? null,
+    }));
+    const currencies = [...new Set(comparisonRows.map(scenario => scenario.base_currency))];
     return {
-      scenario,
-      result: savedResult,
-      simulation: simulationResult,
+      comparisons: comparisonRows,
+      metrics: comparisonRows.map(scenario => ({
+        scenarioId: scenario.id,
+        name: scenario.name,
+        scenarioType: scenario.scenario_type,
+        currency: scenario.base_currency,
+        finalValue: nullableNumber(scenario.final_value),
+        netProfit: nullableNumber(scenario.net_profit),
+        returnPercentage: nullableNumber(scenario.return_percentage),
+        cagr: nullableNumber(scenario.cagr),
+        xirr: nullableNumber(scenario.xirr),
+        volatility: nullableNumber(scenario.volatility),
+        sharpeRatio: nullableNumber(scenario.sharpe_ratio),
+        maxDrawdown: nullableNumber(scenario.max_drawdown),
+      })),
+      normalization: {
+        basis: 'PERCENTAGE_METRICS',
+        currencies,
+        absoluteValuesComparable: currencies.length === 1,
+      },
     };
   }
+}
+
+function nullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }

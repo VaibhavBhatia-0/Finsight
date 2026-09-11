@@ -1,7 +1,6 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import morgan from 'morgan';
 import { errorHandler } from './middleware/errorHandler';
 import { sendError, sendSuccess } from './utils/response';
 import authRoutes from './routes/auth.routes';
@@ -11,6 +10,10 @@ import portfolioRoutes from './routes/portfolio.routes';
 import scenarioRoutes from './routes/scenario.routes';
 import financeRoutes from './routes/finance.routes';
 import backtestRoutes from './routes/backtest.routes';
+import insightsRoutes from './routes/insights.routes';
+import reportRoutes from './routes/report.routes';
+import { requestLogger } from './middleware/requestLogger';
+import { openApiDocument } from './openapi';
 
 export function createApp(): Express {
   const app: Express = express();
@@ -21,7 +24,7 @@ export function createApp(): Express {
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
     credentials: true,
   }));
-  app.use(morgan('dev'));
+  app.use(requestLogger);
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -38,6 +41,8 @@ export function createApp(): Express {
     }, 200, 'Live');
   });
 
+  app.get('/api/v1/openapi.json', (_req: Request, res: Response) => res.json(openApiDocument));
+
   // Mount API Modules under /api/v1
   app.use('/api/v1/auth', authRoutes);
   app.use('/api/v1/markets', marketRoutes);
@@ -46,6 +51,8 @@ export function createApp(): Express {
   app.use('/api/v1/scenarios', scenarioRoutes);
   app.use('/api/v1/finance', financeRoutes);
   app.use('/api/v1/backtests', backtestRoutes);
+  app.use('/api/v1/insights', insightsRoutes);
+  app.use('/api/v1/reports', reportRoutes);
 
   app.use((req: Request, res: Response) => {
     sendError(res, 404, 'ROUTE_NOT_FOUND', `No API route matches ${req.method} ${req.path}`);

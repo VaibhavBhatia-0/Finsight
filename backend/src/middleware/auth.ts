@@ -33,6 +33,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       sendError(res, 401, 'UNAUTHORIZED', 'User associated with token no longer exists');
       return;
     }
+    if (payload.authVersion !== user.auth_version) {
+      sendError(res, 401, 'INVALID_TOKEN', 'Authentication token has been revoked');
+      return;
+    }
 
     req.user = {
       id: user.id,
@@ -56,7 +60,7 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
   try {
     const payload: TokenPayload = verifyToken(token);
     const user = await UserRepository.findById(payload.userId);
-    if (user) {
+    if (user && payload.authVersion === user.auth_version) {
       req.user = {
         id: user.id,
         email: user.email,
@@ -69,4 +73,3 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
   }
   next();
 }
-

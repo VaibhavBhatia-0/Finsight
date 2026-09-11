@@ -24,6 +24,10 @@ import InsightsPage from '../pages/InsightsPage';
 import BacktestingPage from '../pages/BacktestingPage';
 import SettingsPage from '../pages/SettingsPage';
 import ReportsPage from '../pages/ReportsPage';
+import FinanceTransactionsPage from '../pages/finance/TransactionsPage';
+import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from '../pages/auth/ResetPasswordPage';
+import VerifyEmailPage from '../pages/auth/VerifyEmailPage';
 import { useAuth } from '../hooks/useAuth';
 import AppLayout from '../layout/AppLayout';
 
@@ -40,6 +44,9 @@ const AppRoutes: React.FC = () => {
       {/* Public routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/markets" element={<MarketsPage />} />
       <Route path="/markets/:symbol" element={<StockDetailPage />} />
       <Route path="/screener" element={<ScreenerPage />} />
@@ -57,6 +64,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/lab/compare" element={<CompareScenariosPage />} />
         <Route path="/lab/backtest" element={<LabBacktestPage />} />
         <Route path="/finance/expenses" element={<FinanceExpensesPage />} />
+        <Route path="/finance/transactions" element={<FinanceTransactionsPage />} />
         <Route path="/finance/budgets" element={<FinanceBudgetsPage />} />
         <Route path="/finance/savings" element={<FinanceSavingsPage />} />
         <Route path="/finance/goals" element={<FinanceGoalsPage />} />

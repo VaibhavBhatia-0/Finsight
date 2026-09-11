@@ -1,0 +1,157 @@
+warning: in the working copy of '.env.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'analytics/simulations/simulator.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/app.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/controllers/auth.controller.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/controllers/finance.controller.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/controllers/market.controller.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/controllers/scenario.controller.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/controllers/watchlist.controller.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/database/db.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/database/migrate.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/database/seed.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/middleware/auth.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/middleware/errorHandler.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/repositories/backtest.repository.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/repositories/finance.repository.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/repositories/portfolio.repository.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/repositories/scenario.repository.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/repositories/user.repository.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/repositories/userPreferences.repository.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/routes/auth.routes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/routes/finance.routes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/routes/market.routes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/routes/portfolio.routes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/routes/scenario.routes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/services/auth.service.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/services/backtest.service.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/services/finance.service.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/services/marketData.service.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/services/portfolio.service.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/services/scenario.service.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/utils/jwt.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/validators/auth.validator.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/validators/finance.validator.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/src/validators/scenario.validator.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/tests/api/auth.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/tests/api/markets.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/tests/api/portfolios.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/tests/api/scenarios.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/tests/database/migrations.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/tests/unit/finance.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/.env.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/__tests__/hooks/useGoals.test.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/__tests__/server.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/api/client.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/context/AuthContext.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/context/ThemeContext.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/context/UserPreferencesContext.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/hooks/useBacktest.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/hooks/useBudgets.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/hooks/useExpenses.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/hooks/useGoals.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/hooks/usePortfolios.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/hooks/useScenario.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/hooks/useWatchlist.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/layout/Sidebar.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/BacktestingPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/DashboardPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/InsightsPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/MarketsPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/PortfolioDetailPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/ReportsPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/ScreenerPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/SettingsPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/StockDetailPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/auth/LoginPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/auth/RegisterPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/finance/BudgetsPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/finance/ExpensesPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/finance/GoalsPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/finance/SavingsPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/lab/CompareScenariosPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/lab/LabBacktestPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/lab/LabResultView.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/lab/PortfolioScenarioPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/lab/RecurringInvestmentPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/pages/lab/SingleInvestmentPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/routes/AppRoutes.tsx', LF will be replaced by CRLF the next time Git touches it
+ .env.example                                       |  11 [32m++[m
+ analytics/simulations/simulator.py                 |   6 [32m+[m[31m-[m
+ backend/src/app.ts                                 |  11 [32m+[m[31m-[m
+ backend/src/controllers/auth.controller.ts         |  16 [32m+[m[31m-[m
+ backend/src/controllers/finance.controller.ts      |  19 [32m+[m[31m-[m
+ backend/src/controllers/market.controller.ts       |  41 [32m+[m[31m----[m
+ backend/src/controllers/scenario.controller.ts     |  13 [32m+[m[31m-[m
+ backend/src/controllers/watchlist.controller.ts    |   3 [31m-[m
+ backend/src/database/db.ts                         |  46 [32m++++[m[31m-[m
+ backend/src/database/migrate.ts                    |  12 [32m+[m[31m-[m
+ backend/src/database/seed.ts                       |   6 [32m+[m[31m-[m
+ backend/src/middleware/auth.ts                     |   7 [32m+[m[31m-[m
+ backend/src/middleware/errorHandler.ts             |  11 [32m+[m[31m-[m
+ backend/src/repositories/backtest.repository.ts    |  12 [32m+[m[31m-[m
+ backend/src/repositories/finance.repository.ts     | 182 [32m++++++++++++++++[m[31m---[m
+ backend/src/repositories/portfolio.repository.ts   |  17 [32m+[m[31m-[m
+ backend/src/repositories/scenario.repository.ts    |  62 [32m++++++[m[31m-[m
+ backend/src/repositories/user.repository.ts        |  30 [32m+++[m[31m-[m
+ .../src/repositories/userPreferences.repository.ts |  39 [32m+++[m[31m--[m
+ backend/src/routes/auth.routes.ts                  |  14 [32m+[m[31m-[m
+ backend/src/routes/finance.routes.ts               |   6 [32m+[m[31m-[m
+ backend/src/routes/market.routes.ts                |   5 [32m+[m[31m-[m
+ backend/src/routes/portfolio.routes.ts             |  13 [32m+[m[31m-[m
+ backend/src/routes/scenario.routes.ts              |   4 [32m+[m[31m-[m
+ backend/src/services/auth.service.ts               |  83 [32m+++++++[m[31m--[m
+ backend/src/services/backtest.service.ts           |  23 [32m+[m[31m--[m
+ backend/src/services/finance.service.ts            | 154 [32m++++++++++++++[m[31m--[m
+ backend/src/services/marketData.service.ts         |  63 [32m++++[m[31m---[m
+ backend/src/services/portfolio.service.ts          |  47 [32m+++[m[31m--[m
+ backend/src/services/scenario.service.ts           | 130 [32m++++++++++[m[31m----[m
+ backend/src/utils/jwt.ts                           |   1 [32m+[m
+ backend/src/validators/auth.validator.ts           |  27 [32m++[m[31m-[m
+ backend/src/validators/finance.validator.ts        |   4 [32m+[m[31m-[m
+ backend/src/validators/scenario.validator.ts       |   5 [32m+[m
+ backend/tests/api/auth.test.ts                     |  39 [32m++++[m[31m-[m
+ backend/tests/api/markets.test.ts                  |  15 [32m+[m[31m-[m
+ backend/tests/api/portfolios.test.ts               |   4 [32m+[m[31m-[m
+ backend/tests/api/scenarios.test.ts                |  75 [32m+++++++[m[31m-[m
+ backend/tests/database/migrations.test.ts          |  19 [32m+[m[31m-[m
+ backend/tests/unit/finance.test.ts                 |  26 [32m+++[m
+ frontend/.env.example                              |   4 [32m+[m[31m-[m
+ frontend/src/__tests__/hooks/useGoals.test.ts      |   2 [32m+[m[31m-[m
+ frontend/src/__tests__/server.ts                   |  10 [31m--[m
+ frontend/src/api/client.ts                         |  43 [32m++++[m[31m-[m
+ frontend/src/components/ReportExportButton.tsx     |  69 [31m--------[m
+ frontend/src/context/AuthContext.tsx               |  53 [32m++++[m[31m--[m
+ frontend/src/context/ThemeContext.tsx              |  20 [32m+[m[31m--[m
+ frontend/src/context/UserPreferencesContext.tsx    | 149 [32m+++++++++++[m[31m-----[m
+ frontend/src/hooks/useBacktest.ts                  |  43 [32m++[m[31m---[m
+ frontend/src/hooks/useBudgets.ts                   |  40 [32m+++[m[31m--[m
+ frontend/src/hooks/useExpenses.ts                  |  54 [32m++++[m[31m--[m
+ frontend/src/hooks/useGoals.ts                     |  53 [32m++++[m[31m--[m
+ frontend/src/hooks/usePortfolios.ts                |  40 [32m+++[m[31m--[m
+ frontend/src/hooks/useScenario.ts                  |  43 [32m+++[m[31m--[m
+ frontend/src/hooks/useWatchlist.ts                 |  31 [32m++[m[31m--[m
+ frontend/src/layout/Sidebar.tsx                    |   2 [32m+[m[31m-[m
+ frontend/src/pages/BacktestingPage.tsx             |   2 [32m+[m[31m-[m
+ frontend/src/pages/DashboardPage.tsx               |  31 [32m++[m[31m--[m
+ frontend/src/pages/InsightsPage.tsx                |  50 [32m+++++[m[31m-[m
+ frontend/src/pages/MarketsPage.tsx                 |  20 [32m+[m[31m--[m
+ frontend/src/pages/PortfolioDetailPage.tsx         |  45 [32m++++[m[31m-[m
+ frontend/src/pages/ReportsPage.tsx                 |  73 [32m+++++[m[31m---[m
+ frontend/src/pages/ScreenerPage.tsx                | 194 [32m++++++++[m[31m-------------[m
+ frontend/src/pages/SettingsPage.tsx                |  56 [32m++++[m[31m--[m
+ frontend/src/pages/StockDetailPage.tsx             |  12 [32m+[m[31m-[m
+ frontend/src/pages/TransactionForm.tsx             |  78 [31m---------[m
+ frontend/src/pages/auth/LoginPage.tsx              |   3 [32m+[m
+ frontend/src/pages/auth/RegisterPage.tsx           |   2 [32m+[m
+ frontend/src/pages/finance/BudgetsPage.tsx         |  15 [32m+[m[31m-[m
+ frontend/src/pages/finance/ExpensesPage.tsx        |  24 [32m++[m[31m-[m
+ frontend/src/pages/finance/GoalsPage.tsx           |  15 [32m+[m[31m-[m
+ frontend/src/pages/finance/SavingsPage.tsx         |  56 [32m+++[m[31m---[m
+ frontend/src/pages/lab/CompareScenariosPage.tsx    |  39 [32m+++[m[31m--[m
+ frontend/src/pages/lab/LabBacktestPage.tsx         |  21 [32m++[m[31m-[m
+ frontend/src/pages/lab/LabResultView.tsx           |  20 [32m+[m[31m--[m
+ frontend/src/pages/lab/PortfolioScenarioPage.tsx   |  73 [32m++++++[m[31m--[m
+ frontend/src/pages/lab/RecurringInvestmentPage.tsx |  13 [32m+[m[31m-[m
+ frontend/src/pages/lab/SingleInvestmentPage.tsx    |  19 [32m+[m[31m-[m
+ frontend/src/routes/AppRoutes.tsx                  |   8 [32m+[m
+ 79 files changed, 1880 insertions(+), 946 deletions(-)

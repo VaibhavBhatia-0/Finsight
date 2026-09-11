@@ -5,6 +5,7 @@ const INSECURE_EXAMPLE_SECRET = 'finsight_dev_jwt_secret_replace_in_production_m
 export interface TokenPayload {
   userId: string;
   email: string;
+  authVersion: number;
 }
 
 function configuration() {
