@@ -1,47 +1,91 @@
-// src/layout/TopBar.tsx
-import React from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { type FormEvent, useContext, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { LogOut, Menu, Moon, Search, Sun } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import api from '../api/client';
+import type { MarketOverview } from '../api/contracts';
+import { endpoints } from '../api/endpoints';
 import { ThemeContext } from '../context/ThemeContext';
-import { useContext } from 'react';
-import { Moon, Sun, LogOut } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
 
-const TopBar: React.FC = () => {
+const routeLabels: Array<[RegExp, string, string]> = [
+  [/^\/dashboard/, 'Overview', 'Dashboard'],
+  [/^\/markets\//, 'Invest', 'Stock detail'],
+  [/^\/markets/, 'Invest', 'Markets'],
+  [/^\/watchlist/, 'Invest', 'Watchlist'],
+  [/^\/portfolios\//, 'Invest', 'Portfolio detail'],
+  [/^\/portfolios/, 'Invest', 'Portfolios'],
+  [/^\/screener/, 'Invest', 'Stock screener'],
+  [/^\/lab\/single/, 'FinSight Lab', 'Single investment'],
+  [/^\/lab\/recurring/, 'FinSight Lab', 'Recurring / DCA'],
+  [/^\/lab\/portfolio/, 'FinSight Lab', 'Portfolio scenario'],
+  [/^\/lab\/compare/, 'FinSight Lab', 'Compare scenarios'],
+  [/^\/lab\/backtest/, 'FinSight Lab', 'Backtest strategy'],
+  [/^\/lab/, 'FinSight Lab', 'Workspace'],
+  [/^\/finance/, 'Personal finance', 'Money management'],
+  [/^\/insights/, 'Analyze', 'Insights'],
+  [/^\/backtesting/, 'Analyze', 'Backtesting'],
+  [/^\/reports/, 'Analyze', 'Reports'],
+  [/^\/settings/, 'System', 'Settings'],
+];
+
+export default function TopBar({ onMenu }: { onMenu: () => void }) {
   const { user, logout } = useAuth();
-  const themeCtx = useContext(ThemeContext);
-  const isDark = themeCtx?.theme === 'dark';
+  const theme = useContext(ThemeContext);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [search, setSearch] = useState('');
+  const markets = useQuery({
+    queryKey: ['markets-overview'],
+    queryFn: async () => (await api.get<MarketOverview>(endpoints.markets.overview)).data,
+    staleTime: 5 * 60 * 1000,
+  });
+  const context = useMemo(() => routeLabels.find(([pattern]) => pattern.test(location.pathname)) ?? ['' as never, 'FinSight', 'Workspace'], [location.pathname]);
+  const initials = (user?.name ?? 'Guest').split(/\s+/).slice(0, 2).map(value => value[0]).join('').toUpperCase();
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const query = search.trim();
+    navigate(query ? `/markets?q=${encodeURIComponent(query)}` : '/markets');
+  };
 
   return (
-    <header
-      className="flex items-center justify-between px-4 py-2 bg-card-light dark:bg-card-dark border-b border-border-light dark:border-border-dark"
-      aria-label="Top navigation"
-    >
-      <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-200">FinSight</h1>
-      <div className="flex items-center gap-4">
-        {/* Theme toggle */}
-        <button
-          onClick={themeCtx?.toggleTheme}
-          className="p-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-        </button>
-        {/* User avatar / name */}
-        {user && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{user.name}</span>
-            <button
-              onClick={logout}
-              className="p-1 rounded hover:bg-gold-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-              aria-label="Log out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+    <header className="topbar-shell" aria-label="Application header">
+      <div className="market-tape" aria-label="Synthetic market overview">
+        <span className="tape-status"><span className="status-dot" />Market overview · synthetic</span>
+        {markets.data?.indices.slice(0, 6).map(index => (
+          <span className="tape-item" key={index.code}>
+            <span className="tape-symbol">{index.name}</span>
+            <span className="tape-price">{index.price.toLocaleString()}</span>
+            <span className={index.changePercent >= 0 ? 'movement-up' : 'movement-down'}>{index.changePercent >= 0 ? '+' : ''}{index.changePercent.toFixed(2)}%</span>
+          </span>
+        ))}
+        {markets.isError && <span className="tape-item movement-down">Market feed unavailable</span>}
+      </div>
+
+      <div className="topbar-main">
+        <div className="topbar-context">
+          <button className="topbar-icon mobile-menu" onClick={onMenu} aria-label="Open navigation"><Menu size={18} /></button>
+          <div><p className="context-kicker">{context[1]}</p><p className="context-title">{context[2]}</p></div>
+        </div>
+
+        <form className="global-search" onSubmit={submit} role="search">
+          <Search aria-hidden />
+          <input value={search} onChange={event => setSearch(event.target.value)} aria-label="Search stocks" placeholder="Search stocks and companies" />
+          <span className="search-key">↵</span>
+        </form>
+
+        <div className="topbar-actions">
+          <button className="topbar-icon theme-toggle" onClick={theme?.toggleTheme} aria-label="Toggle theme">
+            {theme?.theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+          <div className="user-chip">
+            <span className="avatar-ring">{initials}</span>
+            <div className="user-meta"><p className="user-name">{user?.name ?? 'Explore markets'}</p><p className="user-role">{user ? 'Personal workspace' : 'Public access'}</p></div>
           </div>
-        )}
+          {user && <button className="topbar-icon" onClick={logout} aria-label="Log out"><LogOut size={16} /></button>}
+        </div>
       </div>
     </header>
   );
-};
-
-export default TopBar;
-
+}

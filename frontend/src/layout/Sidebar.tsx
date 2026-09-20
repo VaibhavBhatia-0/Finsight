@@ -1,40 +1,90 @@
-// src/layout/Sidebar.tsx
-import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, BarChart2, List, FolderKanban, Coins, Settings, CreditCard, Wallet, TrendingUp } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  BarChart3, BriefcaseBusiness, ChartNoAxesCombined, FileDown, FlaskConical,
+  Gauge, Landmark, LineChart, ListChecks, ReceiptText, Repeat2, SearchCode,
+  Settings, Sparkles, Star, Target, WalletCards,
+} from 'lucide-react';
 
-// Simplified navigation config – matches the locked route hierarchy
-const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: Home },
-  { to: '/markets', label: 'Markets', icon: BarChart2 },
-  { to: '/watchlist', label: 'Watchlist', icon: List },
-  { to: '/portfolios', label: 'Portfolios', icon: FolderKanban },
-  { to: '/lab', label: 'FinSight Lab', icon: Coins },
-  { to: '/finance/transactions', label: 'Finance', icon: Wallet },
-  { to: '/insights', label: 'Insights', icon: TrendingUp },
-  { to: '/backtesting', label: 'Backtesting', icon: CreditCard },
-  { to: '/settings', label: 'Settings', icon: Settings },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+}
+
+const groups: Array<{ label: string; items: NavItem[] }> = [
+  { label: 'Overview', items: [{ to: '/dashboard', label: 'Dashboard', icon: Gauge }] },
+  {
+    label: 'Invest',
+    items: [
+      { to: '/markets', label: 'Markets', icon: LineChart, end: true },
+      { to: '/watchlist', label: 'Watchlist', icon: Star },
+      { to: '/portfolios', label: 'Portfolios', icon: BriefcaseBusiness },
+      { to: '/screener', label: 'Stock screener', icon: SearchCode },
+    ],
+  },
+  {
+    label: 'FinSight Lab',
+    items: [
+      { to: '/lab', label: 'Lab overview', icon: FlaskConical, end: true },
+      { to: '/lab/single-investment', label: 'Single investment', icon: Landmark },
+      { to: '/lab/recurring-investment', label: 'Recurring / DCA', icon: Repeat2 },
+      { to: '/lab/portfolio-scenario', label: 'Portfolio scenario', icon: BarChart3 },
+    ],
+  },
+  {
+    label: 'Finance',
+    items: [
+      { to: '/finance/transactions', label: 'Transactions', icon: WalletCards },
+      { to: '/finance/expenses', label: 'Expenses', icon: ReceiptText },
+      { to: '/finance/budgets', label: 'Budgets', icon: ListChecks },
+      { to: '/finance/savings', label: 'Savings', icon: Sparkles },
+      { to: '/finance/goals', label: 'Goals', icon: Target },
+    ],
+  },
+  {
+    label: 'Analyze',
+    items: [
+      { to: '/insights', label: 'Insights', icon: Sparkles },
+      { to: '/backtesting', label: 'Backtesting', icon: ChartNoAxesCombined },
+      { to: '/reports', label: 'Reports', icon: FileDown },
+    ],
+  },
 ];
 
-const Sidebar: React.FC = () => {
+export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <nav className="flex flex-col h-full p-4 bg-card-light dark:bg-card-dark border-r border-border-light dark:border-border-dark" aria-label="Primary navigation">
-      {navItems.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          className={({ isActive }) =>
-            `flex items-center gap-2 p-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 ${
-              isActive ? 'bg-gold-100 text-gold-800' : 'text-gray-700 dark:text-gray-300 hover:bg-gold-50 hover:text-gold-800'
-            }`
-          }
-        >
-          <item.icon className="w-5 h-5" aria-hidden="true" />
-          <span>{item.label}</span>
-        </NavLink>
+    <nav className="sidebar-shell" aria-label="Primary navigation">
+      <NavLink to="/dashboard" className="brand-lockup" onClick={onNavigate}>
+        <span className="brand-mark" aria-hidden="true">F</span>
+        <span className="brand-word">Fin<span>Sight</span></span>
+      </NavLink>
+
+      {groups.map((group, groupIndex) => (
+        <section className="nav-section" key={group.label} aria-label={group.label}>
+          <p className="nav-section-label"><span>{String(groupIndex + 1).padStart(2, '0')}</span>{group.label}</p>
+          <div className="nav-stack">
+            {group.items.map(item => (
+              <NavLink key={item.to} to={item.to} end={item.end} onClick={onNavigate} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                <item.icon aria-hidden />
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+        </section>
       ))}
+
+      <div className="sidebar-foot">
+        <NavLink to="/settings" onClick={onNavigate} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+          <Settings aria-hidden />
+          <span>Settings</span>
+        </NavLink>
+        <div className="sidebar-status">
+          <strong>Research workspace</strong>
+          Simulations are educational. Market fixtures are labelled at every decision point.
+        </div>
+      </div>
     </nav>
   );
-};
-
-export default Sidebar;
+}

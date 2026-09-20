@@ -32,5 +32,5 @@ export default function GoogleSignInButton() {
     } finally { setPending(false); }
   };
 
-  return <div className="mt-4"><button type="button" onClick={() => { void start(); }} disabled={pending} className="w-full rounded border px-4 py-2">{pending ? 'Waiting for Google…' : 'Continue with Google'}</button>{error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}</div>;
+  return <div className="auth-provider"><button type="button" onClick={() => { void start(); }} disabled={pending} className="auth-provider-button"><span className="google-g" aria-hidden="true">G</span>{pending ? 'Waiting for Google…' : 'Continue with Google'}</button>{error && <p role="alert" className="auth-error">{error}</p>}</div>;
 }

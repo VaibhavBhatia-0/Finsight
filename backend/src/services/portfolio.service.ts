@@ -139,7 +139,7 @@ export class PortfolioService {
 
     const enrichedHoldings = await Promise.all(
       holdings.map(async (h) => {
-        const quote = await MarketDataService.getQuote(h.symbol);
+        const quote = await MarketDataService.getQuote(h.symbol, h.exchange_code);
         const qty = Number(h.quantity);
         const avgCost = Number(h.average_cost);
 

@@ -8,7 +8,7 @@ const WatchlistDetailPage: React.FC = () => {
     <main className="p-4">
       <h1 className="text-2xl font-bold mb-4">Watchlist Detail</h1>
       <p>Details for watchlist item <strong>{id}</strong>.</p>
-      <Link to="/watchlist" className="text-indigo-600 hover:underline" aria-label="Back to watchlist">
+      <Link to="/watchlist" className="text-gold-600 hover:underline" aria-label="Back to watchlist">
         Back to Watchlist
       </Link>
     </main>

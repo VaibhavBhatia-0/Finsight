@@ -10,8 +10,9 @@ export interface StockQuote {
   open: number;
   previousClose: number;
   volume: number;
-  freshness: 'Synthetic';
+  freshness: 'Live' | 'Delayed' | 'End-of-day' | 'Synthetic';
   timestamp: string;
+  source: string;
 }
 
 export interface StockFundamentalData {
@@ -70,6 +71,7 @@ export class MockMarketDataProvider {
       volume: 1500000 + (hash % 1000000),
       freshness: 'Synthetic',
       timestamp: new Date().toISOString(),
+      source: 'FINSIGHT_DEVELOPMENT_FIXTURE',
     };
   }
 

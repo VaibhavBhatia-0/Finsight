@@ -29,7 +29,7 @@ export class MarketController {
       // Attach current quotes
       const stocksWithQuotes = await Promise.all(
         stocks.map(async (stock) => {
-          const quote = await MarketDataService.getQuote(stock.symbol);
+          const quote = await MarketDataService.getQuote(stock.symbol, stock.exchange_code);
           return {
             ...stock,
             quote,
@@ -37,7 +37,8 @@ export class MarketController {
         })
       );
 
-      sendSuccess(res, stocksWithQuotes, 200, 'Synthetic', { source: 'FINSIGHT_DEVELOPMENT_FIXTURE', degraded: true });
+      const synthetic = stocksWithQuotes.some(stock => stock.quote.freshness === 'Synthetic');
+      sendSuccess(res, stocksWithQuotes, 200, synthetic ? 'Synthetic' : 'Delayed', { source: [...new Set(stocksWithQuotes.map(stock => stock.quote.source))].join(','), degraded: synthetic });
     } catch (error) {
       next(error);
     }
@@ -52,7 +53,7 @@ export class MarketController {
         return;
       }
 
-      const quote = await MarketDataService.getQuote(stock.symbol);
+      const quote = await MarketDataService.getQuote(stock.symbol, stock.exchange_code);
       const fundamentals = await MarketDataService.getStockFundamentals(stock.symbol);
       const dividends = await StockRepository.getDividends(stock.id);
       const corporateActions = await StockRepository.getCorporateActions(stock.id);
@@ -63,7 +64,7 @@ export class MarketController {
         fundamentals,
         dividends,
         corporateActions,
-      }, 200, quote.freshness, { source: 'FINSIGHT_DEVELOPMENT_FIXTURE', degraded: true });
+      }, 200, quote.freshness, { source: quote.source, degraded: quote.freshness === 'Synthetic' });
     } catch (error) {
       next(error);
     }

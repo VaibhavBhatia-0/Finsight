@@ -8,9 +8,11 @@
     "frontend"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=backend",
-    "dev:frontend": "npm run dev --workspace=frontend",
-    "dev:all": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
+    "dev": "node scripts/dev.mjs",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "node scripts/dev.mjs",
+    "dev:web": "npm run dev:web --workspace=frontend",
+    "dev:all": "node scripts/dev.mjs",
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "test:db": "npm run test:db --workspace=backend",

@@ -18,8 +18,8 @@ export default function SettingsPage() {
     void setOrder(order).catch(() => undefined);
   };
 
-  return <section className="mx-auto max-w-3xl p-4">
-    <h1 className="mb-6 text-2xl font-bold">Settings</h1>
+  return <section>
+    <header className="page-heading"><div><p className="page-eyebrow">System</p><h1>Settings</h1><p className="page-subtitle">Personalize display, currency, tax-estimate context, dashboard composition, and tracked indices.</p></div></header>
     {error && <p className="mb-4 text-red-600" role="alert">{error.message}</p>}
     <fieldset className="rounded border p-4" disabled={saving}>
       <legend className="px-2 font-semibold">Presentation</legend>

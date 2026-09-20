@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Spinner } from '../../components/Spinner';
+import FinanceNav from '../../components/FinanceNav';
 import { useUserPreferences } from '../../context/UserPreferencesContext';
 import { useCreateFinanceTransaction, useCreateRecurringRule, useDeactivateRecurringRule, useDeleteFinanceTransaction, useFinanceTransactions, useRecurringRules } from '../../hooks/useFinanceTransactions';
 
@@ -39,10 +39,10 @@ export default function FinanceTransactionsPage() {
   const error = transactions.error || rules.error;
   if (error) return <p className="p-4 text-red-600">{error.message}</p>;
 
-  return <main className="mx-auto max-w-5xl p-4">
-    <h1 className="text-2xl font-bold">Finance transactions</h1>
+  return <main>
+    <header className="page-heading"><div><p className="page-eyebrow">Personal finance</p><h1>Transactions</h1><p className="page-subtitle">A chronological ledger for income, expenses, transfers, and recurring rules.</p></div></header>
     <FinanceNav />
-    <form onSubmit={submit} className="my-6 grid gap-3 rounded border p-4 sm:grid-cols-2">
+    <form onSubmit={submit} className="panel my-6 grid gap-3 rounded border p-4 sm:grid-cols-2">
       <select name="transactionType" aria-label="Transaction type" className="rounded border px-3 py-2"><option value="EXPENSE">Expense</option><option value="INCOME">Income</option><option value="TRANSFER">Transfer</option></select>
       <input name="category" required maxLength={100} placeholder="Category" className="rounded border px-3 py-2" />
       <input name="amount" required type="number" min="0.01" step="0.01" placeholder="Amount" className="rounded border px-3 py-2" />
@@ -55,11 +55,7 @@ export default function FinanceTransactionsPage() {
       <button disabled={createTransaction.isPending || createRule.isPending} className="rounded bg-gold-600 px-4 py-2 text-white sm:col-span-2">{createTransaction.isPending || createRule.isPending ? 'Saving…' : recurring ? 'Create recurring rule' : 'Add transaction'}</button>
       {(createTransaction.error || createRule.error) && <p className="text-red-600 sm:col-span-2">{(createTransaction.error || createRule.error)?.message}</p>}
     </form>
-    <section className="mb-8"><h2 className="mb-3 text-xl font-semibold">Recurring rules</h2>{rules.data?.length ? <div className="space-y-2">{rules.data.map(rule => <div key={rule.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-3"><span>{rule.transaction_type} · {rule.category} · {rule.currency} {Number(rule.amount).toLocaleString()} · {rule.frequency} · {rule.active ? 'Active' : 'Inactive'}</span>{rule.active && <button onClick={() => deactivateRule.mutate(rule.id)} disabled={deactivateRule.isPending} className="text-sm text-red-600">Stop</button>}</div>)}</div> : <p>No recurring rules.</p>}</section>
-    <section><h2 className="mb-3 text-xl font-semibold">Ledger</h2>{transactions.data?.length ? <div className="overflow-x-auto"><table className="min-w-full"><thead><tr><th className="text-left">Date</th><th className="text-left">Type</th><th className="text-left">Category</th><th className="text-right">Amount</th><th className="text-left">Source</th><th></th></tr></thead><tbody>{transactions.data.map(item => <tr key={item.id} className="border-t"><td className="py-2">{item.transaction_date.slice(0, 10)}</td><td>{item.transaction_type}</td><td>{item.category}</td><td className="text-right">{item.currency} {Number(item.amount).toLocaleString()}</td><td>{item.recurring_rule_id ? 'Recurring rule' : 'Manual'}</td><td className="text-right"><button onClick={() => deleteTransaction.mutate(item.id)} disabled={deleteTransaction.isPending} className="text-sm text-red-600">Delete</button></td></tr>)}</tbody></table></div> : <p>No transactions recorded.</p>}</section>
+    <section className="panel mb-4"><div className="panel-header"><div><h2 className="panel-title">Recurring rules</h2><p className="panel-subtitle">Scheduled ledger entries materialize once per due date.</p></div></div>{rules.data?.length ? <div className="data-list">{rules.data.map(rule => <div key={rule.id} className="data-row"><span><strong>{rule.category}</strong><span className="ml-2 text-sm text-gray-500">{rule.transaction_type} · {rule.currency} {Number(rule.amount).toLocaleString()} · {rule.frequency} · {rule.active ? 'Active' : 'Inactive'}</span></span>{rule.active && <button onClick={() => deactivateRule.mutate(rule.id)} disabled={deactivateRule.isPending} className="text-sm text-red-600">Stop</button>}</div>)}</div> : <div className="empty-state"><p>No recurring rules.</p></div>}</section>
+    <section className="panel"><div className="panel-header"><div><h2 className="panel-title">Ledger</h2><p className="panel-subtitle">Manual and scheduled transactions in one audit trail.</p></div></div>{transactions.data?.length ? <div className="overflow-x-auto"><table><thead><tr><th className="text-left">Date</th><th className="text-left">Type</th><th className="text-left">Category</th><th className="text-right">Amount</th><th className="text-left">Source</th><th></th></tr></thead><tbody>{transactions.data.map(item => <tr key={item.id}><td>{item.transaction_date.slice(0, 10)}</td><td><span className={`ledger-pill ${item.transaction_type.toLowerCase()}`}>{item.transaction_type}</span></td><td>{item.category}</td><td className="text-right font-mono">{item.currency} {Number(item.amount).toLocaleString()}</td><td>{item.recurring_rule_id ? 'Recurring rule' : 'Manual'}</td><td className="text-right"><button onClick={() => deleteTransaction.mutate(item.id)} disabled={deleteTransaction.isPending} className="text-sm text-red-600">Delete</button></td></tr>)}</tbody></table></div> : <div className="empty-state"><p>No transactions recorded.</p></div>}</section>
   </main>;
-}
-
-function FinanceNav() {
-  return <nav className="mt-3 flex flex-wrap gap-3 text-sm"><Link to="/finance/transactions">Transactions</Link><Link to="/finance/expenses">Expenses</Link><Link to="/finance/budgets">Budgets</Link><Link to="/finance/savings">Savings</Link><Link to="/finance/goals">Goals</Link></nav>;
 }

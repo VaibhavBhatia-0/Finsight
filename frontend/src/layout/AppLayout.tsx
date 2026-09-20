@@ -1,30 +1,22 @@
-// src/layout/AppLayout.tsx
-import React from 'react';
+import { useState, type ReactNode } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 
-interface Props {
-  children?: React.ReactNode;
-}
+export default function AppLayout({ children }: { children?: ReactNode }) {
+  const [navigationOpen, setNavigationOpen] = useState(false);
 
-const AppLayout: React.FC<Props> = ({ children }) => {
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Desktop sidebar */}
-      <aside className="hidden md:block w-64">
-        <Sidebar />
+    <div className="finsight-shell">
+      <div className="ambient-track" aria-hidden="true" />
+      {navigationOpen && <button className="mobile-scrim" aria-label="Close navigation" onClick={() => setNavigationOpen(false)} />}
+      <aside className={`app-rail${navigationOpen ? ' mobile-open' : ''}`}>
+        <Sidebar onNavigate={() => setNavigationOpen(false)} />
       </aside>
-
-      {/* Main content area */}
-      <div className="flex flex-col flex-1 overflow-auto">
-        <TopBar />
-        <main className="flex-1 p-4 overflow-y-auto bg-background-light dark:bg-background-dark">
-          {children ?? <Outlet />}
-        </main>
+      <div className="app-stage">
+        <TopBar onMenu={() => setNavigationOpen(true)} />
+        <div className="app-content">{children ?? <Outlet />}</div>
       </div>
     </div>
   );
-};
-
-export default AppLayout;
+}

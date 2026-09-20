@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "commonjs",
     "moduleResolution": "node",
+    "ignoreDeprecations": "5.0",
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -16,4 +17,3 @@
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
 }
-

@@ -104,12 +104,10 @@ export const ScreenerPage: React.FC = () => {
   const displayedStocks = data?.items ?? [];
 
   return (
-    <div className="p-4 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4 flex items-center">
-        <Search className="mr-2" aria-hidden="true" /> Stock Screener
-      </h1>
+    <main>
+      <header className="page-heading"><div><p className="page-eyebrow">Invest</p><h1 className="flex items-center"><Search className="mr-3 text-gold-400" aria-hidden="true" /> Stock screener</h1><p className="page-subtitle">Combine valuation, fundamentals, liquidity, momentum, and moving-average filters against the development catalogue.</p></div><FreshnessBadge freshness="Synthetic" /></header>
       <section
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 p-4 border rounded bg-white dark:bg-gray-800"
+        className="panel screener-filter-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 p-4 border rounded"
         aria-label="Filter panel"
       >
         <div className="flex flex-col">
@@ -231,7 +229,7 @@ export const ScreenerPage: React.FC = () => {
           <button disabled={page === totalPages} onClick={() => setPage(p => Math.min(p + 1, totalPages))} className="px-3 py-1 border rounded disabled:opacity-50">Next</button>
         </nav>
       )}
-    </div>
+    </main>
   );
 };
 

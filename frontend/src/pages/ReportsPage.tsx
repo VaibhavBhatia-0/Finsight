@@ -38,10 +38,9 @@ export default function ReportsPage() {
     }
   };
 
-  return <main className="mx-auto max-w-2xl p-4">
-    <h1 className="mb-2 text-2xl font-bold">Reports</h1>
-    <p className="mb-6 text-sm text-gray-600">Authenticated exports include their source, methodology, generation time, and educational-use disclaimer.</p>
-    <form onSubmit={submit} className="grid gap-4 rounded border p-4 sm:grid-cols-2">
+  return <main>
+    <header className="page-heading"><div><p className="page-eyebrow">Analyze</p><h1>Reports</h1><p className="page-subtitle">Authenticated exports include their source, methodology, generation time, and educational-use disclaimer.</p></div></header>
+    <form onSubmit={submit} className="panel grid max-w-3xl gap-4 rounded border p-4 sm:grid-cols-2">
       <label className="text-sm">Report<select value={reportType} onChange={event => setReportType(event.target.value as ReportType)} className="mt-1 block w-full rounded border px-3 py-2"><option value="portfolios">Portfolio valuations</option><option value="portfolio_transactions">Portfolio transactions</option><option value="scenarios">Saved scenarios</option><option value="backtests">Backtests</option><option value="finance_summary">Finance summary</option><option value="finance_transactions">Finance transactions</option></select></label>
       <label className="text-sm">Format<select name="format" className="mt-1 block w-full rounded border px-3 py-2"><option value="csv">CSV</option><option value="pdf">PDF</option></select></label>
       {reportType === 'portfolio_transactions' && <label className="text-sm sm:col-span-2">Portfolio<select name="portfolioId" required className="mt-1 block w-full rounded border px-3 py-2"><option value="">Select a portfolio</option>{portfolios.data?.map(item => <option key={item.portfolio.id} value={item.portfolio.id}>{item.portfolio.name}</option>)}</select></label>}

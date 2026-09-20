@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useForm, type SubmitHandler } from 'react-hook-form';
+import { Controller, useForm, type SubmitHandler } from 'react-hook-form';
 import { Loader2 } from 'lucide-react';
+import StockSearchInput from '../../components/StockSearchInput';
 import { useRunScenario, useSaveScenario, type ScenarioRequest } from '../../hooks/useScenario';
 import LabResultView from './LabResultView';
 
@@ -17,13 +18,21 @@ interface FormValues {
 }
 
 export default function PortfolioScenarioPage() {
-  const { register, handleSubmit, reset } = useForm<FormValues>({
-    defaultValues: { currency: 'INR', firstWeight: 50, secondWeight: 50 },
+  const { register, handleSubmit, reset, control, setError, formState: { errors } } = useForm<FormValues>({
+    defaultValues: { currency: 'INR', firstSymbol: '', secondSymbol: '', firstWeight: 50, secondWeight: 50 },
   });
   const runScenario = useRunScenario();
   const saveScenario = useSaveScenario();
   const [lastRequest, setLastRequest] = useState<ScenarioRequest | null>(null);
   const submit: SubmitHandler<FormValues> = async (data) => {
+    if (Math.abs(data.firstWeight + data.secondWeight - 100) > 0.001) {
+      setError('secondWeight', { message: 'Portfolio weights must total 100%.' });
+      return;
+    }
+    if (data.firstSymbol === data.secondSymbol) {
+      setError('secondSymbol', { message: 'Choose two different assets.' });
+      return;
+    }
     const request: ScenarioRequest = {
       scenarioType: 'PORTFOLIO_SCENARIO',
       assets: [
@@ -40,15 +49,17 @@ export default function PortfolioScenarioPage() {
     setLastRequest(request);
   };
 
-  return <section className="mx-auto max-w-2xl p-4">
-    <h1 className="mb-4 text-2xl font-bold">Portfolio Scenario Lab</h1>
-    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+  return <main className="scenario-page">
+    <header className="page-heading"><div><p className="page-eyebrow">FinSight Lab · Scenario engine</p><h1>Portfolio scenario</h1><p className="page-subtitle">Explore a weighted multi-asset allocation with attribution that reconciles to total performance.</p></div></header>
+    <form onSubmit={handleSubmit(submit)} className="panel scenario-form space-y-4">
+      <div className="panel-header"><div><h2 className="panel-title">Allocation and assumptions</h2><p className="panel-subtitle">Weights must form one complete portfolio</p></div><span className="freshness-badge">Synthetic history</span></div>
       <div className="grid grid-cols-[1fr_8rem] gap-3">
-        <label className="block text-sm font-medium">First asset<input {...register('firstSymbol', { required: true })} className="mt-1 w-full rounded border px-3 py-2" placeholder="AAPL" /></label>
+        <Controller name="firstSymbol" control={control} rules={{ required: true }} render={({ field }) => <StockSearchInput label="First asset" value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} />} />
         <label className="block text-sm font-medium">Weight %<input type="number" min="0.01" max="99.99" step="0.01" {...register('firstWeight', { required: true, valueAsNumber: true })} className="mt-1 w-full rounded border px-3 py-2" /></label>
-        <label className="block text-sm font-medium">Second asset<input {...register('secondSymbol', { required: true })} className="mt-1 w-full rounded border px-3 py-2" placeholder="MSFT" /></label>
+        <Controller name="secondSymbol" control={control} rules={{ required: true }} render={({ field }) => <StockSearchInput label="Second asset" value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} />} />
         <label className="block text-sm font-medium">Weight %<input type="number" min="0.01" max="99.99" step="0.01" {...register('secondWeight', { required: true, valueAsNumber: true })} className="mt-1 w-full rounded border px-3 py-2" /></label>
       </div>
+      {(errors.firstSymbol || errors.secondSymbol || errors.secondWeight) && <p className="error-banner text-sm" role="alert">{errors.secondSymbol?.message ?? errors.secondWeight?.message ?? 'Select both assets from the catalogue.'}</p>}
       <div className="grid grid-cols-2 gap-4">
         <label className="block text-sm font-medium">Start date<input type="date" {...register('startDate', { required: true })} className="mt-1 w-full rounded border px-3 py-2" /></label>
         <label className="block text-sm font-medium">End date<input type="date" {...register('endDate', { required: true })} className="mt-1 w-full rounded border px-3 py-2" /></label>
@@ -60,5 +71,5 @@ export default function PortfolioScenarioPage() {
     </form>
     <LabResultView result={runScenario.data ?? null} isError={runScenario.isError} error={runScenario.error ?? undefined} />
     {lastRequest && runScenario.data && <div className="mt-3"><button type="button" disabled={saveScenario.isPending || saveScenario.isSuccess} onClick={() => saveScenario.mutate({ ...lastRequest, name: 'Portfolio scenario' })} className="rounded border border-gold-600 px-4 py-2 text-gold-700 disabled:opacity-50">{saveScenario.isSuccess ? 'Scenario saved' : saveScenario.isPending ? 'Saving…' : 'Save scenario'}</button>{saveScenario.error && <p className="mt-2 text-red-600" role="alert">{saveScenario.error.message}</p>}</div>}
-  </section>;
+  </main>;
 }

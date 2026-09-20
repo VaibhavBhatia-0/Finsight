@@ -3,6 +3,7 @@ import { WatchlistRepository } from '../repositories/watchlist.repository';
 import { MarketDataService } from '../services/marketData.service';
 import { sendSuccess } from '../utils/response';
 import { AppError } from '../middleware/errorHandler';
+import type { StockQuote } from '../services/marketData/mockProvider';
 
 export class WatchlistController {
   static async getWatchlists(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -21,7 +22,7 @@ export class WatchlistController {
           const items = await WatchlistRepository.getItems(wl.id);
           const itemsWithQuotes = await Promise.all(
             items.map(async (item) => {
-              const quote = await MarketDataService.getQuote(item.symbol);
+              const quote = await MarketDataService.getQuote(item.symbol, item.exchange_code);
               return {
                 ...item,
                 quote,
@@ -35,7 +36,9 @@ export class WatchlistController {
         })
       );
 
-      sendSuccess(res, enriched, 200, 'Delayed');
+      const quotes: StockQuote[] = enriched.flatMap(watchlist => watchlist.items.map((item: { quote: StockQuote }) => item.quote));
+      const synthetic = quotes.some(quote => quote.freshness === 'Synthetic');
+      sendSuccess(res, enriched, 200, synthetic ? 'Synthetic' : 'Delayed', { source: [...new Set(quotes.map(quote => quote.source))].join(',') || 'NO_QUOTES', degraded: synthetic });
     } catch (error) {
       next(error);
     }

@@ -35,7 +35,7 @@ interface UserPreferencesContextValue {
 const defaultPreferences: DashboardPreferences = {
   order: [...dashboardSectionIds],
   visible: { summary: true, indices: true, watchlist: true, insights: true, labLaunch: true },
-  theme: 'system',
+  theme: 'dark',
   defaultCurrency: 'INR',
   selectedMarketIndices: ['NIFTY_50', 'SENSEX', 'SP500', 'NASDAQ_COMP'],
   taxResidency: null,

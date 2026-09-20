@@ -37,16 +37,16 @@ export const LabResultView: React.FC<Props> = ({ result, isLoading, isError, err
   const renderMetric = (label: string, value: unknown) => {
     if (value === undefined || value === null) return null;
     return (
-      <div className="flex justify-between py-1">
-        <span className="font-medium">{label}:</span>
-        <span>{String(value)}</span>
+      <div className="result-row">
+        <span>{label}</span>
+        <strong className="font-mono">{String(value)}</strong>
       </div>
     );
   };
 
   return (
-    <section className="mt-8 border rounded p-4 bg-gray-50">
-      <h2 className="text-xl font-semibold mb-2">Simulation Result</h2>
+    <section className="panel mt-8">
+      <div className="panel-header"><div><h2 className="panel-title">Simulation result</h2><p className="panel-subtitle">Historical scenario output and reconciled attribution</p></div><FreshnessBadge freshness="Synthetic" /></div>
       <div className="grid grid-cols-1 gap-2">
         {renderMetric("Mode", result.mode)}
         {Object.entries(result.financials ?? {}).map(([key, value]) => <React.Fragment key={`financial-${key}`}>{renderMetric(key.replace(/_/g, ' '), value)}</React.Fragment>)}
@@ -56,13 +56,12 @@ export const LabResultView: React.FC<Props> = ({ result, isLoading, isError, err
       {/* Assumptions & Methodology */}
       {result.assumptions && (
         <details className="mt-4">
-          <summary className="cursor-pointer text-indigo-600 underline">Assumptions & Methodology</summary>
+          <summary className="cursor-pointer text-gold-300">Assumptions &amp; methodology</summary>
           <p className="mt-2 whitespace-pre-wrap text-sm">{Array.isArray(result.assumptions) ? result.assumptions.join('\n') : result.assumptions}</p>
         </details>
       )}
-      {result.taxMethodology && <details className="mt-4"><summary className="cursor-pointer text-indigo-600 underline">Tax estimate methodology</summary><dl className="mt-2 grid gap-1 text-sm"><div><dt className="inline font-medium">Applied: </dt><dd className="inline">{result.taxMethodology.applied ? 'Yes' : 'No'}</dd></div><div><dt className="inline font-medium">Method: </dt><dd className="inline">{result.taxMethodology.methodology.replace(/_/g, ' ')}</dd></div><div><dt className="inline font-medium">Holding period: </dt><dd className="inline">{result.taxMethodology.holdingPeriodDays} days</dd></div>{result.taxMethodology.applied && <><div><dt className="inline font-medium">Rule: </dt><dd className="inline">{result.taxMethodology.jurisdiction} {result.taxMethodology.taxType} at {(result.taxMethodology.rate * 100).toFixed(2)}%</dd></div><div><dt className="inline font-medium">Exemption: </dt><dd className="inline">{result.taxMethodology.exemptionAmount.toLocaleString()}</dd></div><div><dt className="inline font-medium">Source: </dt><dd className="inline">{result.taxMethodology.sourceReference}</dd></div></>}<p className="mt-2">{result.taxMethodology.disclaimer}</p></dl></details>}
+      {result.taxMethodology && <details className="mt-4"><summary className="cursor-pointer text-gold-600 underline">Tax estimate methodology</summary><dl className="mt-2 grid gap-1 text-sm"><div><dt className="inline font-medium">Applied: </dt><dd className="inline">{result.taxMethodology.applied ? 'Yes' : 'No'}</dd></div><div><dt className="inline font-medium">Method: </dt><dd className="inline">{result.taxMethodology.methodology.replace(/_/g, ' ')}</dd></div><div><dt className="inline font-medium">Holding period: </dt><dd className="inline">{result.taxMethodology.holdingPeriodDays} days</dd></div>{result.taxMethodology.applied && <><div><dt className="inline font-medium">Rule: </dt><dd className="inline">{result.taxMethodology.jurisdiction} {result.taxMethodology.taxType} at {(result.taxMethodology.rate * 100).toFixed(2)}%</dd></div><div><dt className="inline font-medium">Exemption: </dt><dd className="inline">{result.taxMethodology.exemptionAmount.toLocaleString()}</dd></div><div><dt className="inline font-medium">Source: </dt><dd className="inline">{result.taxMethodology.sourceReference}</dd></div></>}<p className="mt-2">{result.taxMethodology.disclaimer}</p></dl></details>}
       {/* Freshness badge */}
-      <div className="mt-2"><FreshnessBadge freshness="Synthetic" /></div>
       {/* Disclaimer */}
       <p className="mt-4 text-xs text-gray-600 italic">
         The information provided is for educational purposes only and does not constitute financial advice.

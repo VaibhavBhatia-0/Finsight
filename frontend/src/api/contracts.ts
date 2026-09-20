@@ -42,8 +42,9 @@ export interface MarketQuote {
   open: number;
   previousClose: number;
   volume: number;
-  freshness: 'Synthetic';
+  freshness: 'Live' | 'Delayed' | 'End-of-day' | 'Synthetic';
   timestamp: string;
+  source: string;
 }
 
 export interface MarketStock {
@@ -67,7 +68,7 @@ export interface MarketIndex {
   price: number;
   change: number;
   changePercent: number;
-  freshness: 'Synthetic';
+  freshness: 'Live' | 'Delayed' | 'End-of-day' | 'Synthetic';
   timestamp: string;
 }
 

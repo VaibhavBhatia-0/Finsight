@@ -3,6 +3,7 @@ import { StockRepository, StockRow } from '../repositories/stock.repository';
 import { PriceHistoryRepository, PriceBar } from '../repositories/priceHistory.repository';
 import { AppError } from '../middleware/errorHandler';
 import type { ScreenerFilters } from '../validators/market.validator';
+import { TwelveDataMarketDataProvider } from './marketData/twelveDataProvider';
 
 export class MarketDataService {
   private static assertMockIsAllowed(): void {
@@ -14,7 +15,14 @@ export class MarketDataService {
    * Retrieves real-time or delayed quote for a symbol.
    * Checks database cache or delegates to the active provider adapter.
    */
-  public static async getQuote(symbol: string): Promise<StockQuote> {
+  public static async getQuote(symbol: string, exchange?: string): Promise<StockQuote> {
+    if (TwelveDataMarketDataProvider.configured()) {
+      try {
+        return await TwelveDataMarketDataProvider.getQuote(symbol, exchange);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+      }
+    }
     this.assertMockIsAllowed();
     return MockMarketDataProvider.getQuote(symbol);
   }
@@ -86,8 +94,8 @@ export class MarketDataService {
   public static async screenStocks(filters: ScreenerFilters) {
     this.assertMockIsAllowed();
     const allStocks = await StockRepository.findAll();
-    let screened = allStocks.map((stock) => {
-      const quote = MockMarketDataProvider.getQuote(stock.symbol);
+    let screened = await Promise.all(allStocks.map(async (stock) => {
+      const quote = await this.getQuote(stock.symbol, (stock as any).exchange_code);
       const fund = MockMarketDataProvider.getFundamentals(stock.symbol);
       return {
         id: stock.id,
@@ -115,7 +123,7 @@ export class MarketDataService {
         fiftyTwoWeekLow: fund.fiftyTwoWeekLow,
         yearPosition: yearPosition(quote.price, fund.fiftyTwoWeekLow, fund.fiftyTwoWeekHigh),
       };
-    });
+    }));
 
     // AND-Combined Filtering
     if (filters.exchange) {

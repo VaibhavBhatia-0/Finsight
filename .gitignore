@@ -1,5 +1,6 @@
 .env
 .pglite_data/
+.pglite_data*/
 node_modules/
 dist/
 coverage/
