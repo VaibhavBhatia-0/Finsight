@@ -41,5 +41,10 @@ for (const child of children) {
   });
 }
 
-process.on('SIGINT', () => stop());
-process.on('SIGTERM', () => stop());
+// Windows sends Ctrl+C to the whole console process group. Let the backend receive
+// it directly so PGlite can flush and close instead of immediately forcing the
+// npm/cmd process tree down with taskkill /F.
+if (process.platform !== 'win32') {
+  process.on('SIGINT', () => stop());
+  process.on('SIGTERM', () => stop());
+}

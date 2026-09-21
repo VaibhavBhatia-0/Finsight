@@ -27,7 +27,7 @@ describe('PostgreSQL Database Schema & Migration Verification', () => {
     }
   });
 
-  it('2. Confirms all 30 distinct entity tables exist in PostgreSQL information_schema', async () => {
+  it('2. Confirms all 31 distinct entity tables exist in PostgreSQL information_schema', async () => {
     const res = await pg.query<{ table_name: string }>(`
       SELECT table_name 
       FROM information_schema.tables 
@@ -67,9 +67,10 @@ describe('PostgreSQL Database Schema & Migration Verification', () => {
       'savings_goal_contributions',
       'auth_action_tokens',
       'oauth_states',
+      'auth_identities',
     ];
 
-    expect(expectedEntities.length).toBe(30);
+    expect(expectedEntities.length).toBe(31);
     for (const table of expectedEntities) {
       expect(tableNames, `Table ${table} should exist in database`).toContain(table);
     }
@@ -222,5 +223,44 @@ describe('PostgreSQL Database Schema & Migration Verification', () => {
     const symbols = stocksRes.rows.map((r: any) => r.symbol);
     expect(symbols).toContain('RELIANCE');
     expect(symbols).toContain('NVDA');
+  });
+
+  it('9. Applies portfolio-intelligence schema additions and accepts first-class TAX ledger entries', async () => {
+    const portfolioColumns = await pg.query<{ column_name: string; data_type: string }>(`
+      SELECT column_name, data_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'portfolios'
+        AND column_name = 'allocation_targets';
+    `);
+    expect(portfolioColumns.rows).toEqual([{ column_name: 'allocation_targets', data_type: 'jsonb' }]);
+
+    const goalColumns = await pg.query<{ column_name: string }>(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'savings_goals'
+        AND column_name IN ('base_currency', 'portfolio_id', 'status')
+      ORDER BY column_name;
+    `);
+    expect(goalColumns.rows.map(row => row.column_name)).toEqual(['base_currency', 'portfolio_id', 'status']);
+
+    const userId = 'a0000000-0000-0000-0000-000000000001';
+    const portfolio = await pg.query<{ id: string }>(`
+      INSERT INTO portfolios (user_id, name, base_currency)
+      VALUES ('${userId}', 'Migration Tax Fixture', 'INR')
+      RETURNING id;
+    `);
+    await expect(pg.query(`
+      INSERT INTO portfolio_transactions
+        (portfolio_id, transaction_type, transaction_date, amount, currency, fx_rate)
+      VALUES (${portfolio.rows[0].id}, 'TAX', '2026-09-21', 125.50, 'INR', 1);
+    `)).resolves.toBeDefined();
+
+    await expect(pg.query(`
+      INSERT INTO portfolio_transactions
+        (portfolio_id, transaction_type, transaction_date, amount, currency, fx_rate)
+      VALUES (${portfolio.rows[0].id}, 'TAX', '2026-09-21', 0, 'INR', 1);
+    `)).rejects.toThrow(/check constraint/i);
   });
 });

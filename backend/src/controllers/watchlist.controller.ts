@@ -3,7 +3,7 @@ import { WatchlistRepository } from '../repositories/watchlist.repository';
 import { MarketDataService } from '../services/marketData.service';
 import { sendSuccess } from '../utils/response';
 import { AppError } from '../middleware/errorHandler';
-import type { StockQuote } from '../services/marketData/mockProvider';
+import type { StockQuote } from '../services/marketData/types';
 
 export class WatchlistController {
   static async getWatchlists(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -22,11 +22,11 @@ export class WatchlistController {
           const items = await WatchlistRepository.getItems(wl.id);
           const itemsWithQuotes = await Promise.all(
             items.map(async (item) => {
-              const quote = await MarketDataService.getQuote(item.symbol, item.exchange_code);
-              return {
-                ...item,
-                quote,
-              };
+              try {
+                return { ...item, quote: await MarketDataService.getQuote(item.symbol, item.exchange_code) };
+              } catch {
+                return { ...item, quote: null, quoteError: 'UNAVAILABLE' };
+              }
             })
           );
           return {
@@ -36,9 +36,11 @@ export class WatchlistController {
         })
       );
 
-      const quotes: StockQuote[] = enriched.flatMap(watchlist => watchlist.items.map((item: { quote: StockQuote }) => item.quote));
-      const synthetic = quotes.some(quote => quote.freshness === 'Synthetic');
-      sendSuccess(res, enriched, 200, synthetic ? 'Synthetic' : 'Delayed', { source: [...new Set(quotes.map(quote => quote.source))].join(',') || 'NO_QUOTES', degraded: synthetic });
+      const quotes: StockQuote[] = enriched.flatMap(watchlist => watchlist.items.flatMap((item: { quote: StockQuote | null }) => item.quote ? [item.quote] : []));
+      const unavailable = enriched.some(watchlist => watchlist.items.some((item: { quote: StockQuote | null }) => !item.quote));
+      const degraded = quotes.some(quote => quote.isStale || quote.freshness === 'SYNTHETIC');
+      const freshness = unavailable ? 'UNAVAILABLE' : quotes.some(quote => quote.freshness === 'STALE') ? 'STALE' : (quotes[0]?.freshness || 'UNAVAILABLE');
+      sendSuccess(res, enriched, 200, freshness, { source: [...new Set(quotes.map(quote => quote.source))].join(',') || 'NO_QUOTES', degraded: degraded || unavailable });
     } catch (error) {
       next(error);
     }

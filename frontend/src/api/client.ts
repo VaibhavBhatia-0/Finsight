@@ -1,4 +1,10 @@
 export type DataFreshness =
+  | 'LIVE'
+  | 'DELAYED'
+  | 'LAST CLOSE'
+  | 'STALE'
+  | 'UNAVAILABLE'
+  | 'SYNTHETIC'
   | 'Live'
   | 'Delayed'
   | 'End-of-day'

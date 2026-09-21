@@ -75,10 +75,33 @@ export class ReportService {
         const values = filterByDate(await PortfolioRepository.getTransactions(portfolio.id), query, 'transaction_date');
         return report(`${portfolio.name} transactions`, ['date', 'type', 'symbol', 'quantity', 'price', 'amount', 'currency', 'fee', 'fx_rate'], values.map(value => ({ date: dateOnly(value.transaction_date), type: value.transaction_type, symbol: (value as any).symbol, quantity: value.quantity, price: value.price, amount: value.amount, currency: value.currency, fee: value.fee_amount, fx_rate: value.fx_rate })), 'Authoritative portfolio ledger in chronological order.', 'USER_PORTFOLIO_LEDGER');
       }
+      case 'portfolio_intelligence': {
+        const value = await PortfolioService.getIntelligence(query.portfolioId!, userId);
+        const performance = value.performance;
+        const risk = value.risk || {};
+        const totals = value.attribution?.totals || {};
+        return report(`${value.portfolio.name} intelligence`, ['section', 'metric', 'value', 'currency_or_unit'], [
+          { section: 'Performance', metric: 'Current value', value: performance?.currentValue, currency_or_unit: value.portfolio.baseCurrency },
+          { section: 'Performance', metric: 'Portfolio return', value: performance?.portfolioReturn, currency_or_unit: '%' },
+          { section: 'Performance', metric: 'Portfolio CAGR', value: performance?.portfolioCagr, currency_or_unit: '%' },
+          { section: 'Performance', metric: 'Benchmark return', value: performance?.benchmarkReturn, currency_or_unit: '%' },
+          { section: 'Performance', metric: 'Benchmark difference', value: performance?.absoluteDifference, currency_or_unit: 'percentage points' },
+          { section: 'Risk', metric: 'Volatility', value: risk.volatility, currency_or_unit: '%' },
+          { section: 'Risk', metric: 'Sharpe ratio', value: risk.sharpeRatio, currency_or_unit: 'ratio' },
+          { section: 'Risk', metric: 'Maximum drawdown', value: risk.maxDrawdown, currency_or_unit: '%' },
+          { section: 'Risk', metric: 'Beta', value: risk.beta, currency_or_unit: 'ratio' },
+          { section: 'Attribution', metric: 'Price return', value: totals.priceReturn, currency_or_unit: value.portfolio.baseCurrency },
+          { section: 'Attribution', metric: 'Dividends', value: totals.dividends, currency_or_unit: value.portfolio.baseCurrency },
+          { section: 'Attribution', metric: 'FX impact', value: totals.fxImpact, currency_or_unit: value.portfolio.baseCurrency },
+          { section: 'Attribution', metric: 'Fees', value: totals.fees, currency_or_unit: value.portfolio.baseCurrency },
+          { section: 'Attribution', metric: 'Taxes', value: totals.taxes, currency_or_unit: value.portfolio.baseCurrency },
+          { section: 'Attribution', metric: 'Net P&L', value: totals.netPnl, currency_or_unit: value.portfolio.baseCurrency },
+        ], 'Ledger-derived portfolio intelligence using provider historical prices and valuation-date FX. Attribution must reconcile to net P&L.', 'PORTFOLIO_LEDGER_AND_PROVIDER_HISTORY');
+      }
       case 'portfolios': {
         const portfolios = await PortfolioRepository.findByUserId(userId);
         const values = await Promise.all(portfolios.map(portfolio => PortfolioService.getValuation(portfolio.id, userId)));
-        return report('Portfolio valuations', ['id', 'name', 'currency', 'total_value', 'cash_balance', 'holdings_value', 'total_invested', 'total_return', 'return_percentage', 'dividends', 'fees'], values.map(value => ({ id: value.portfolio.id, name: value.portfolio.name, currency: value.portfolio.baseCurrency, total_value: value.summary.totalValue, cash_balance: value.summary.cashBalance, holdings_value: value.summary.holdingsValue, total_invested: value.summary.totalInvested, total_return: value.summary.totalReturnAmount, return_percentage: value.summary.totalReturnPercentage, dividends: value.summary.dividendsEarned, fees: value.summary.feesPaid })), 'Ledger state combined with current synthetic development quotes and latest available FX.', 'PORTFOLIO_LEDGER_AND_FINSIGHT_DEVELOPMENT_FIXTURE');
+        return report('Portfolio valuations', ['id', 'name', 'currency', 'total_value', 'cash_balance', 'holdings_value', 'total_invested', 'total_return', 'return_percentage', 'dividends', 'fees'], values.map(value => ({ id: value.portfolio.id, name: value.portfolio.name, currency: value.portfolio.baseCurrency, total_value: value.summary.totalValue, cash_balance: value.summary.cashBalance, holdings_value: value.summary.holdingsValue, total_invested: value.summary.totalInvested, total_return: value.summary.totalReturnAmount, return_percentage: value.summary.totalReturnPercentage, dividends: value.summary.dividendsEarned, fees: value.summary.feesPaid })), 'Ledger state combined with the configured market-data provider and latest available FX.', 'PORTFOLIO_LEDGER_AND_PROVIDER_MARKET_DATA');
       }
     }
   }

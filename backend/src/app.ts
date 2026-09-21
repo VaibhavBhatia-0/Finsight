@@ -14,6 +14,7 @@ import insightsRoutes from './routes/insights.routes';
 import reportRoutes from './routes/report.routes';
 import { requestLogger } from './middleware/requestLogger';
 import { openApiDocument } from './openapi';
+import planningRoutes from './routes/planning.routes';
 
 export function createApp(): Express {
   const app: Express = express();
@@ -51,6 +52,7 @@ export function createApp(): Express {
   app.use('/api/v1/scenarios', scenarioRoutes);
   app.use('/api/v1/finance', financeRoutes);
   app.use('/api/v1/backtests', backtestRoutes);
+  app.use('/api/v1/planning', planningRoutes);
   app.use('/api/v1/insights', insightsRoutes);
   app.use('/api/v1/reports', reportRoutes);
 

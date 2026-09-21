@@ -17,7 +17,8 @@ export const scenarioSimulationSchema = z.object({
   taxRuleId: z.coerce.number().int().positive().optional(),
   taxJurisdiction: z.enum(['IN', 'US']).optional(),
   feeRate: z.coerce.number().min(0).max(0.1).optional(),
-  contributionFrequency: z.enum(['MONTHLY', 'QUARTERLY', 'ANNUALLY']).optional(),
+  contributionFrequency: z.enum(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'ANNUALLY']).optional(),
+  contributionGrowthRate: z.coerce.number().min(0).max(10).optional(),
 }).passthrough().superRefine((value, context) => {
   if (value.startDate >= value.endDate) context.addIssue({ code: z.ZodIssueCode.custom, path: ['endDate'], message: 'End date must be after start date' });
   if (value.scenarioType === 'PORTFOLIO_SCENARIO' && !value.assets) context.addIssue({ code: z.ZodIssueCode.custom, path: ['assets'], message: 'Portfolio assets are required' });

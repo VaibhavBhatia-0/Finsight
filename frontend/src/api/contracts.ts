@@ -34,18 +34,33 @@ export interface ProfileResponse {
 
 export interface MarketQuote {
   symbol: string;
+  providerSymbol: string;
+  provider: string;
+  exchange: string;
+  currency: string;
   price: number;
   change: number;
   changePercent: number;
-  high: number;
-  low: number;
-  open: number;
-  previousClose: number;
-  volume: number;
-  freshness: 'Live' | 'Delayed' | 'End-of-day' | 'Synthetic';
+  high: number | null;
+  low: number | null;
+  open: number | null;
+  previousClose: number | null;
+  volume: number | null;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  marketTimestamp: string;
   timestamp: string;
+  fetchedAt: string;
+  freshnessSeconds: number;
+  freshnessLabel: MarketFreshness;
+  freshness: MarketFreshness;
+  marketStatus: 'OPEN' | 'CLOSED' | 'UNKNOWN';
+  isDelayed: boolean;
+  isStale: boolean;
   source: string;
 }
+
+export type MarketFreshness = 'LIVE' | 'DELAYED' | 'LAST CLOSE' | 'STALE' | 'UNAVAILABLE' | 'SYNTHETIC';
 
 export interface MarketStock {
   id: ApiId;
@@ -54,10 +69,19 @@ export interface MarketStock {
   currency: string;
   sector: string | null;
   industry: string | null;
+  display_symbol: string;
+  provider_symbol: string;
+  asset_type: string;
   exchange: string;
   exchange_code: string;
   country_code: string;
-  quote: MarketQuote;
+  quote: MarketQuote | null;
+  quoteError?: 'UNAVAILABLE';
+}
+
+export interface MarketStocksResponse {
+  items: MarketStock[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
 export interface MarketIndex {
@@ -68,8 +92,16 @@ export interface MarketIndex {
   price: number;
   change: number;
   changePercent: number;
-  freshness: 'Live' | 'Delayed' | 'End-of-day' | 'Synthetic';
+  freshness: MarketFreshness;
+  freshnessLabel: MarketFreshness;
+  marketTimestamp: string;
   timestamp: string;
+  fetchedAt: string;
+  marketStatus: 'OPEN' | 'CLOSED' | 'UNKNOWN';
+  isDelayed: boolean;
+  isStale: boolean;
+  provider: string;
+  source: string;
 }
 
 export interface MarketOverview {
@@ -79,19 +111,24 @@ export interface MarketOverview {
 }
 
 export interface StockFundamentals {
-  marketCap: number;
-  peRatio: number;
-  eps: number;
-  dividendYield: number;
-  revenue: number;
-  profit: number;
-  totalDebt: number;
-  fiftyTwoWeekHigh: number;
-  fiftyTwoWeekLow: number;
-  rsi14: number;
-  sma50: number;
-  sma200: number;
+  marketCap: number | null;
+  peRatio: number | null;
+  eps: number | null;
+  dividendYield: number | null;
+  revenue: number | null;
+  profit: number | null;
+  totalDebt: number | null;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  rsi14: number | null;
+  sma50: number | null;
+  sma200: number | null;
+  source: string;
+  retrievedAt: string;
 }
+
+export interface MarketPriceBar { date: string; open: number; high: number; low: number; close: number; adjusted_close?: number; volume: number }
+export interface MarketHistory { symbol: string; provider: string; currency: string; exchange: string; interval: string; range: string; fetchedAt: string; adjusted: boolean; bars: MarketPriceBar[]; events: Array<{ type: 'DIVIDEND' | 'SPLIT'; date: string; amount: number | null; ratio: number | null; currency: string; source: string }> }
 
 export interface Dividend {
   id: ApiId;
@@ -112,7 +149,7 @@ export interface CorporateAction {
 }
 
 export interface StockDetail {
-  stock: Omit<MarketStock, 'quote'>;
+  stock: Omit<MarketStock, 'quote' | 'quoteError'>;
   quote: MarketQuote;
   fundamentals: StockFundamentals;
   dividends: Dividend[];
@@ -130,20 +167,21 @@ export interface ScreenerStock {
   sector: string | null;
   price: number;
   changePercent: number;
-  volume: number;
-  marketCap: number;
-  peRatio: number;
-  eps: number;
-  dividendYield: number;
-  revenue: number;
-  profit: number;
-  debt: number;
-  rsi14: number;
-  sma50: number;
-  sma200: number;
-  fiftyTwoWeekHigh: number;
-  fiftyTwoWeekLow: number;
-  yearPosition: number;
+  volume: number | null;
+  marketCap: number | null;
+  peRatio: number | null;
+  eps: number | null;
+  dividendYield: number | null;
+  revenue: number | null;
+  profit: number | null;
+  debt: number | null;
+  rsi14: number | null;
+  sma50: number | null;
+  sma200: number | null;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  yearPosition: number | null;
+  quote: MarketQuote;
 }
 
 export interface ScreenerResponse {
@@ -161,7 +199,8 @@ export interface WatchlistItem {
   sector: string | null;
   exchange_code: string;
   country_code: string;
-  quote: MarketQuote;
+  quote: MarketQuote | null;
+  quoteError?: 'UNAVAILABLE';
 }
 
 export interface Watchlist {
@@ -199,6 +238,7 @@ export interface PortfolioValuation {
     benchmarkCode: string | null;
     benchmarkName: string | null;
     createdAt: string;
+    allocationTargets: Record<string, number>;
   };
   summary: {
     totalValue: number;
@@ -212,6 +252,7 @@ export interface PortfolioValuation {
     totalReturnPercentage: number;
     dividendsEarned: number;
     feesPaid: number;
+    taxesPaid: number;
   };
   holdings: PortfolioHolding[];
   risk: {
@@ -223,7 +264,7 @@ export interface PortfolioValuation {
   };
 }
 
-export type PortfolioTransactionType = 'BUY' | 'SELL' | 'DIVIDEND' | 'SPLIT' | 'DEPOSIT' | 'WITHDRAWAL' | 'FEE';
+export type PortfolioTransactionType = 'BUY' | 'SELL' | 'DIVIDEND' | 'SPLIT' | 'DEPOSIT' | 'WITHDRAWAL' | 'FEE' | 'TAX';
 
 export interface PortfolioTransactionRow {
   id: ApiId;
@@ -260,6 +301,119 @@ export interface PortfolioTransactionResponse {
   valuation: PortfolioValuation;
 }
 
+export interface PortfolioBenchmark {
+  id: ApiId;
+  code: 'NIFTY_50' | 'SENSEX' | 'SP500' | 'NASDAQ_COMP';
+  name: string;
+  currency: string;
+  exchange: string;
+}
+
+export interface PortfolioIntelligence {
+  portfolio: {
+    id: ApiId;
+    name: string;
+    baseCurrency: string;
+    benchmarkId: ApiId | null;
+    benchmarkCode: string | null;
+    benchmarkName: string | null;
+    allocationTargets: Record<string, number>;
+  };
+  status: 'AVAILABLE' | 'INSUFFICIENT_DATA';
+  reason?: string;
+  asOfDate?: string;
+  performance: null | {
+    startDate: string | null;
+    endDate: string | null;
+    currentValue: number;
+    netContributions: number;
+    netPnl: number;
+    portfolioReturn: number | null;
+    portfolioCagr: number | null;
+    xirr: number | null;
+    benchmark: { code: string; name: string } | null;
+    benchmarkReturn: number | null;
+    benchmarkCagr: number | null;
+    absoluteDifference: number | null;
+    cagrDifference: number | null;
+    series: Array<{ date: string; portfolioValue: number | null; portfolioNormalized: number; benchmarkNormalized: number | null }>;
+    methodology: string;
+  };
+  risk: {
+    status: 'AVAILABLE' | 'INSUFFICIENT_HISTORICAL_DATA';
+    observations?: number;
+    volatility?: number | null;
+    sharpeRatio?: number | null;
+    maxDrawdown?: number | null;
+    beta?: number | null;
+    correlation?: number | null;
+    downsideObservations?: number | null;
+    downsidePercentage?: number | null;
+    riskContribution?: Array<{ symbol: string; percentage: number | null }>;
+    concentration?: { herfindahlIndex: number; largestHoldingPercentage: number; holdingCount: number };
+  };
+  allocation: {
+    holdings: Array<{
+      stockId: ApiId | null; symbol: string; name: string; sector: string | null; geography: string | null;
+      currency: string; assetClass: string; quantity: number | null; price: number | null; fxRate: number;
+      value: number; percentage: number; targetPercentage: number | null; targetDifference: number | null;
+    }>;
+    assetClasses: PortfolioExposure[];
+    sectors: PortfolioExposure[];
+    geographies: PortfolioExposure[];
+    currencies: PortfolioExposure[];
+    cash: { value: number; percentage: number };
+  };
+  attribution: {
+    holdings: Array<{ stockId: ApiId | null; symbol: string; priceReturn: number; dividends: number; fxImpact: number; fees: number; taxes: number; netContribution: number }>;
+    totals: { priceReturn: number; dividends: number; fxImpact: number; fees: number; taxes: number; netPnl: number; reconciliationDifference: number };
+    invariant: string;
+  };
+  dataQuality?: { historicalObservations: number; benchmarkObservations: number; missingSectorCount: number; source: string };
+  methodology?: Record<string, string>;
+}
+
+export interface PortfolioExposure { label: string; value: number; percentage: number }
+
+export interface PortfolioComparison {
+  portfolios: Array<Pick<PortfolioIntelligence, 'portfolio' | 'performance' | 'risk' | 'allocation'> & {
+    contributionHistory: Array<{
+      date: string;
+      type: 'DEPOSIT' | 'WITHDRAWAL';
+      currency: string;
+      amount: number;
+      baseCurrency: string;
+      baseAmount: number;
+    }>;
+  }>;
+  synchronizedPeriod: { startDate: string | null; endDate: string | null };
+  comparisonSeries: Array<{ portfolioId: ApiId; name: string; values: Array<{ date: string; value: number }> }>;
+  compatibility: {
+    currencies: string[]; benchmarks: string[]; sameCurrency: boolean; sameBenchmark: boolean;
+    differentStartDates: boolean; note: string;
+  };
+}
+
+export interface RequiredContributionResult {
+  targetAmount: number;
+  currentAmount: number;
+  remainingAmount: number;
+  frequency: 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+  contributionCount: number;
+  contributionDates: string[];
+  noGrowth: { requiredContribution: number; totalContributions: number; estimatedGrowth: number };
+  growthAssumption: null | { assumedAnnualReturn: number; requiredContribution: number; totalContributions: number; estimatedGrowth: number; disclaimer: string };
+}
+
+export interface PlanningSimulationResponse {
+  hypothetical?: boolean;
+  historicalReplay?: boolean;
+  result: ScenarioResult;
+  baseline?: ScenarioResult | null;
+  comparison?: { finalValueDifference: number; contributionDifference: number } | null;
+  disclaimer: string;
+}
+
 export interface ScenarioAssetInput {
   stockId?: ApiId;
   symbol?: string;
@@ -280,11 +434,14 @@ export interface ScenarioRequest {
   taxRuleId?: ApiId;
   taxJurisdiction?: 'IN' | 'US';
   feeRate?: number;
-  contributionFrequency?: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
+  contributionFrequency?: 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
+  contributionGrowthRate?: number;
+  portfolioRecurring?: boolean;
 }
 
 export interface ScenarioResult {
   mode: ScenarioRequest['scenarioType'];
+  baseCurrency?: string;
   stock?: { id: ApiId; symbol: string; name: string; currency: string };
   assets?: Array<{ id: ApiId; symbol: string; name: string; currency: string; weight: number }>;
   details: Record<string, string | number>;
@@ -292,6 +449,16 @@ export interface ScenarioResult {
   attribution: Record<string, number>;
   risk_metrics: Record<string, number | null>;
   assumptions: string[];
+  performance_series?: Array<{ date: string; value: number }>;
+  provenance?: {
+    marketDataSource: string;
+    dataRange: { start: string; end: string };
+    retrievedAt: string;
+    fxSource: string;
+    corporateActionMethodology: string;
+    feeMethodology: string;
+    taxMethodology: string;
+  };
   contributions?: Array<Record<string, string | number>>;
   taxMethodology?: {
     applied: boolean;
@@ -352,6 +519,9 @@ export interface BacktestRequest {
   endDate: string;
   name?: string;
   strategyType?: 'BUY_AND_HOLD';
+  benchmarkSymbol?: '^NSEI' | '^BSESN' | '^GSPC' | '^IXIC';
+  feeRate?: number;
+  fixedFee?: number;
 }
 
 export interface BacktestResult {
@@ -368,10 +538,22 @@ export interface BacktestResult {
     volatility: number | null;
     maxDrawdown: number | null;
     sharpeRatio: number | null;
+    xirr: number | null;
+    benchmarkReturn: number | null;
+    benchmarkCagr: number | null;
+    benchmarkDifference: number | null;
+    relativePerformance: number | null;
+    feesPaid: number;
+    grossFinalValue: number;
   };
   details: {
-    timeSeries: Array<{ date: string; value: number }>;
+    timeSeries: Array<{ date: string; value: number; strategy_value: number; benchmark_value: number | null }>;
     strategyType: 'BUY_AND_HOLD';
+    benchmarkSymbol: string | null;
+    feeRate: number;
+    fixedFee: number;
+    attribution: { gross_market_profit?: number; fee_impact?: number; net_profit?: number };
+    methodology: string;
   };
 }
 
@@ -438,6 +620,9 @@ export interface GoalRow {
   target_amount: number | string;
   current_amount: number | string;
   target_date: string | null;
+  base_currency: string;
+  portfolio_id: ApiId | null;
+  status: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
 }
 
 export interface FinanceSummary {
@@ -473,6 +658,9 @@ export interface FinanceSummary {
     remainingAmount: number;
     progressPercentage: number;
     targetDate: string | null;
+    baseCurrency: string;
+    linkedPortfolioId: ApiId | null;
+    status: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
     monthlyContributionRate: number;
     monthsToGoal: number | null;
     projectedCompletionDate: string | null;

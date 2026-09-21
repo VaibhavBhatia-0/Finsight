@@ -10,10 +10,13 @@ export interface Goal {
   targetAmount: number;
   currentAmount: number;
   targetDate: string | null;
+  baseCurrency: string;
+  portfolioId: ApiId | null;
+  status: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
 }
 
 function toGoal(item: GoalRow): Goal {
-  return { id: item.id, name: item.name, targetAmount: Number(item.target_amount), currentAmount: Number(item.current_amount), targetDate: item.target_date?.slice(0, 10) ?? null };
+  return { id: item.id, name: item.name, targetAmount: Number(item.target_amount), currentAmount: Number(item.current_amount), targetDate: item.target_date?.slice(0, 10) ?? null, baseCurrency: item.base_currency, portfolioId: item.portfolio_id, status: item.status };
 }
 
 export async function fetchGoals(): Promise<Goal[]> {
@@ -34,7 +37,7 @@ export const useCreateGoal = (): UseMutationResult<Goal, Error, Omit<Goal, 'id'>
   const queryClient = useQueryClient();
   return useMutation<Goal, Error, Omit<Goal, 'id'>>({
     mutationFn: async (newGoal) => {
-      const { data } = await api.post<GoalRow>(endpoints.finance.goals, { ...newGoal, targetDate: newGoal.targetDate ?? undefined });
+      const { data } = await api.post<GoalRow>(endpoints.finance.goals, { ...newGoal, targetDate: newGoal.targetDate ?? undefined, portfolioId: newGoal.portfolioId ?? undefined });
       return toGoal(data);
     },
     onSuccess: () => Promise.all([["goals"], ['finance-summary'], ['insights']].map(queryKey => queryClient.invalidateQueries({ queryKey }))),

@@ -4,7 +4,7 @@ import calendar
 import json
 import os
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 try:
@@ -155,7 +155,7 @@ def simulate_single(payload: Dict[str, Any]) -> Dict[str, Any]:
     metrics["xirr"] = calculate_xirr([(buy["date"], -(amount + amount * fee_rate)), (sell["date"], net_value + amount * fee_rate)])
     return result("SINGLE_INVESTMENT", amount, gross_value, dividend_amount, fees, estimated_tax, asset_return, fx_impact, net_profit, metrics, {
         "actual_buy_date": buy["date"], "actual_sell_date": sell["date"], "buy_price": float(buy["close"]), "sell_price": float(sell["close"]), "initial_shares": initial_shares, "adjusted_shares": final_shares,
-    })
+    }, values)
 
 
 def add_months(value: date, months: int) -> date:
@@ -165,22 +165,29 @@ def add_months(value: date, months: int) -> date:
 
 
 def contribution_dates(start: str, end: str, frequency: str) -> List[str]:
-    step = {"MONTHLY": 1, "QUARTERLY": 3, "ANNUALLY": 12}.get(frequency)
-    if not step:
-        raise ValueError("contribution_frequency must be MONTHLY, QUARTERLY, or ANNUALLY")
     current, finish = datetime.strptime(start, "%Y-%m-%d").date(), datetime.strptime(end, "%Y-%m-%d").date()
     values = []
     while current <= finish:
         values.append(current.isoformat())
-        current = add_months(current, step)
+        if frequency == "WEEKLY":
+            current += timedelta(days=7)
+        else:
+            step = {"MONTHLY": 1, "QUARTERLY": 3, "ANNUALLY": 12}.get(frequency)
+            if not step:
+                raise ValueError("contribution_frequency must be WEEKLY, MONTHLY, QUARTERLY, or ANNUALLY")
+            current = add_months(current, step)
     return values
 
 
 def simulate_recurring(payload: Dict[str, Any]) -> Dict[str, Any]:
-    contribution = float(payload["initial_amount"])
-    if contribution <= 0:
+    base_contribution = float(payload["initial_amount"])
+    growth_rate = float(payload.get("contribution_growth_rate", 0))
+    if base_contribution <= 0:
         raise ValueError("initial_amount (the recurring contribution) must be positive")
+    if growth_rate < 0 or growth_rate > 10:
+        raise ValueError("contribution_growth_rate must be between 0 and 10")
     start, end = payload["start_date"], payload["end_date"]
+    start_year = datetime.strptime(start, "%Y-%m-%d").date().year
     rows = _prices(payload.get("price_history", []))
     sell = price_on_or_before(rows, end)
     if not sell:
@@ -192,6 +199,8 @@ def simulate_recurring(payload: Dict[str, Any]) -> Dict[str, Any]:
         buy = price_on_or_after(rows, scheduled)
         if not buy or buy["date"] > sell["date"]:
             continue
+        contribution_year = datetime.strptime(scheduled, "%Y-%m-%d").date().year
+        contribution = base_contribution * ((1 + growth_rate) ** max(0, contribution_year - start_year))
         entry_fx = fx_rate(fx_rows, buy["date"], asset_currency, base_currency)
         lots.append({"date": buy["date"], "scheduled_date": scheduled, "shares": contribution / entry_fx / float(buy["close"]), "entry_fx": entry_fx, "amount": contribution})
     if not lots:
@@ -202,8 +211,8 @@ def simulate_recurring(payload: Dict[str, Any]) -> Dict[str, Any]:
     final_lot_assets = [adjusted_shares(lot["shares"], splits, lot["date"], sell["date"]) * sell_price for lot in lots]
     final_equity = sum(final_lot_assets) * sell_fx
     dividends, dividend_flows = dividends_for_lots(lots, payload.get("dividends", []), splits, sell["date"], fx_rows, asset_currency, base_currency)
-    invested = contribution * len(lots)
-    asset_return = sum(asset * lot["entry_fx"] - contribution for asset, lot in zip(final_lot_assets, lots))
+    invested = sum(lot["amount"] for lot in lots)
+    asset_return = sum(asset * lot["entry_fx"] - lot["amount"] for asset, lot in zip(final_lot_assets, lots))
     fx_impact = sum(asset * (sell_fx - lot["entry_fx"]) for asset, lot in zip(final_lot_assets, lots))
     gross_value = final_equity + dividends
     gross_profit = asset_return + fx_impact + dividends
@@ -211,12 +220,18 @@ def simulate_recurring(payload: Dict[str, Any]) -> Dict[str, Any]:
     fees = invested * fee_rate + gross_value * fee_rate
     tax = max(0.0, gross_profit - fees - float(payload.get("tax_exemption", 0))) * float(payload.get("tax_rate", 0))
     net_value, net_profit = gross_value - fees - tax, gross_profit - fees - tax
-    flows = [(lot["date"], -(contribution * (1 + fee_rate))) for lot in lots]
+    flows = [(lot["date"], -(lot["amount"] * (1 + fee_rate))) for lot in lots]
     flows.extend((flow["date"], flow["amount"]) for flow in dividend_flows)
     flows.append((sell["date"], final_equity - gross_value * fee_rate - tax))
-    metrics = {"cagr": None, "xirr": calculate_xirr(flows), "volatility": None, "sharpe_ratio": None, "max_drawdown": None, "beta": None, "benchmark_return": None, "benchmark_difference": None}
-    output = result("RECURRING_INVESTMENT", invested, gross_value, dividends, fees, tax, asset_return, fx_impact, net_profit, metrics, {"actual_sell_date": sell["date"], "contribution_count": len(lots), "contribution_amount": contribution, "final_shares": sum(asset / sell_price for asset in final_lot_assets)})
-    output["contributions"] = [{"scheduled_date": lot["scheduled_date"], "trade_date": lot["date"], "amount": contribution, "shares": _round(lot["shares"]), "fx_rate": _round(lot["entry_fx"])} for lot in lots]
+    values = []
+    for row in rows:
+        if lots[0]["date"] <= row["date"] <= sell["date"]:
+            shares = sum(adjusted_shares(lot["shares"], splits, lot["date"], row["date"]) for lot in lots if lot["date"] <= row["date"])
+            accrued = sum(flow["amount"] for flow in dividend_flows if flow["date"] <= row["date"])
+            values.append({"date": row["date"], "value": shares * float(row["close"]) * fx_rate(fx_rows, row["date"], asset_currency, base_currency) + accrued})
+    metrics = {"cagr": None, "xirr": calculate_xirr(flows), "volatility": calculate_volatility([row["value"] for row in values]), "sharpe_ratio": calculate_sharpe_ratio([row["value"] for row in values], float(payload.get("risk_free_rate", 0.065))), "max_drawdown": calculate_max_drawdown([row["value"] for row in values]), "beta": None, "benchmark_return": None, "benchmark_difference": None}
+    output = result("RECURRING_INVESTMENT", invested, gross_value, dividends, fees, tax, asset_return, fx_impact, net_profit, metrics, {"actual_sell_date": sell["date"], "contribution_count": len(lots), "starting_contribution_amount": base_contribution, "annual_contribution_growth_percentage": growth_rate * 100, "final_shares": sum(asset / sell_price for asset in final_lot_assets)}, values)
+    output["contributions"] = [{"scheduled_date": lot["scheduled_date"], "trade_date": lot["date"], "amount": _round(lot["amount"]), "shares": _round(lot["shares"]), "fx_rate": _round(lot["entry_fx"])} for lot in lots]
     return output
 
 
@@ -228,26 +243,51 @@ def simulate_portfolio(payload: Dict[str, Any]) -> Dict[str, Any]:
     weights = [float(asset.get("weight", 0)) for asset in assets]
     if any(weight < 0 for weight in weights) or abs(sum(weights) - 1) > 1e-8:
         raise ValueError("Portfolio asset weights must be non-negative and sum to 1")
+    recurring = bool(payload.get("portfolio_recurring", False))
     component_results = []
     for asset, weight in zip(assets, weights):
-        component_payload = {**payload, **asset, "initial_amount": amount * weight, "fee_rate": 0, "tax_rate": 0, "mode": "SINGLE_INVESTMENT"}
-        component_results.append(simulate_single(component_payload))
+        component_payload = {**payload, **asset, "initial_amount": amount * weight, "fee_rate": 0, "tax_rate": 0, "mode": "RECURRING_INVESTMENT" if recurring else "SINGLE_INVESTMENT"}
+        component_results.append(simulate_recurring(component_payload) if recurring else simulate_single(component_payload))
+    invested = sum(item["financials"]["initial_investment"] for item in component_results)
     gross_value = sum(item["financials"]["gross_value"] for item in component_results)
     dividends = sum(item["financials"]["dividends"] for item in component_results)
     asset_return = sum(item["attribution"]["asset_return_amount"] for item in component_results)
     fx_impact = sum(item["attribution"]["fx_impact_amount"] for item in component_results)
     gross_profit = asset_return + fx_impact + dividends
     fee_rate = float(payload.get("fee_rate", 0))
-    fees = amount * fee_rate + gross_value * fee_rate
+    fees = invested * fee_rate + gross_value * fee_rate
     tax = max(0.0, gross_profit - fees - float(payload.get("tax_exemption", 0))) * float(payload.get("tax_rate", 0))
     net_profit = gross_profit - fees - tax
-    metrics = {"cagr": calculate_cagr(amount, gross_value - fees - tax, payload["start_date"], payload["end_date"]), "xirr": calculate_xirr([(payload["start_date"], -(amount + amount * fee_rate)), (payload["end_date"], gross_value - gross_value * fee_rate - tax)]), "volatility": None, "sharpe_ratio": None, "max_drawdown": None, "beta": None, "benchmark_return": None, "benchmark_difference": None}
-    output = result("PORTFOLIO_SCENARIO", amount, gross_value, dividends, fees, tax, asset_return, fx_impact, net_profit, metrics, {"asset_count": len(assets)})
+    if recurring:
+        scheduled_amounts = []
+        start_year = datetime.strptime(payload["start_date"], "%Y-%m-%d").date().year
+        growth_rate = float(payload.get("contribution_growth_rate", 0))
+        for scheduled in contribution_dates(payload["start_date"], payload["end_date"], payload.get("contribution_frequency", "MONTHLY")):
+            contribution_year = datetime.strptime(scheduled, "%Y-%m-%d").date().year
+            scheduled_amounts.append((scheduled, amount * ((1 + growth_rate) ** max(0, contribution_year - start_year))))
+        cash_flows = [(scheduled, -value * (1 + fee_rate)) for scheduled, value in scheduled_amounts]
+        cash_flows.append((payload["end_date"], gross_value - gross_value * fee_rate - tax))
+        xirr = calculate_xirr(cash_flows)
+        cagr = None
+    else:
+        xirr = calculate_xirr([(payload["start_date"], -(amount + amount * fee_rate)), (payload["end_date"], gross_value - gross_value * fee_rate - tax)])
+        cagr = calculate_cagr(amount, gross_value - fees - tax, payload["start_date"], payload["end_date"])
+    metrics = {"cagr": cagr, "xirr": xirr, "volatility": None, "sharpe_ratio": None, "max_drawdown": None, "beta": None, "benchmark_return": None, "benchmark_difference": None}
+    dates = sorted(set(row["date"] for item in component_results for row in item.get("performance_series", [])))
+    component_maps = [{row["date"]: row["value"] for row in item.get("performance_series", [])} for item in component_results]
+    last_values = [0.0 for _ in component_maps]
+    performance = []
+    for current_date in dates:
+        for index, values_by_date in enumerate(component_maps):
+            if current_date in values_by_date:
+                last_values[index] = float(values_by_date[current_date])
+        performance.append({"date": current_date, "value": sum(last_values)})
+    output = result("PORTFOLIO_SCENARIO", invested, gross_value, dividends, fees, tax, asset_return, fx_impact, net_profit, metrics, {"asset_count": len(assets), "investment_mode": "RECURRING" if recurring else "LUMP_SUM"}, performance)
     output["assets"] = [{"symbol": asset.get("symbol"), "weight": weight, "result": item} for asset, weight, item in zip(assets, weights, component_results)]
     return output
 
 
-def result(mode: str, invested: float, gross_value: float, dividends: float, fees: float, tax: float, asset_return: float, fx_impact: float, net_profit: float, metrics: Dict[str, Any], details: Dict[str, Any]) -> Dict[str, Any]:
+def result(mode: str, invested: float, gross_value: float, dividends: float, fees: float, tax: float, asset_return: float, fx_impact: float, net_profit: float, metrics: Dict[str, Any], details: Dict[str, Any], performance_series: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     gross_profit = asset_return + fx_impact + dividends
     return {
         "mode": mode,
@@ -255,6 +295,7 @@ def result(mode: str, invested: float, gross_value: float, dividends: float, fee
         "financials": {"initial_investment": _round(invested), "gross_value": _round(gross_value), "gross_profit": _round(gross_profit), "gross_return_percentage": _round(gross_profit / invested * 100), "dividends": _round(dividends), "fees": _round(fees), "estimated_tax": _round(tax), "net_value": _round(invested + net_profit), "net_profit": _round(net_profit), "net_return_percentage": _round(net_profit / invested * 100)},
         "attribution": {"asset_return_amount": _round(asset_return), "fx_impact_amount": _round(fx_impact), "dividend_amount": _round(dividends), "fees_amount": _round(-fees), "tax_amount": _round(-tax), "net_profit": _round(net_profit), "reconciliation_difference": _round(net_profit - (asset_return + fx_impact + dividends - fees - tax))},
         "risk_metrics": metrics,
+        "performance_series": [{"date": row["date"], "value": _round(float(row["value"]))} for row in (performance_series or [])],
         "assumptions": ["FX rates are base-currency units per asset-currency unit.", "Corporate actions and dividends are processed by effective date.", "Taxes are educational estimates, not tax advice."],
     }
 

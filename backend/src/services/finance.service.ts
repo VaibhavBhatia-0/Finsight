@@ -4,8 +4,32 @@ import { UserRepository } from '../repositories/user.repository';
 import { FXService } from './fx.service';
 import { AppError } from '../middleware/errorHandler';
 import { db, IDatabaseExecutor } from '../database/db';
+import { PortfolioRepository } from '../repositories/portfolio.repository';
 
 export class FinanceService {
+  public static async createGoal(userId: string, data: any) {
+    await this.assertOwnedPortfolio(userId, data.portfolioId);
+    return FinanceRepository.createSavingsGoal(userId, {
+      ...data,
+      status: data.currentAmount >= data.targetAmount ? 'COMPLETED' : data.status,
+    });
+  }
+
+  public static async updateGoal(id: string | number, userId: string, data: any) {
+    await this.assertOwnedPortfolio(userId, data.portfolioId);
+    const value = await FinanceRepository.updateSavingsGoal(id, userId, {
+      ...data,
+      status: data.currentAmount >= data.targetAmount ? 'COMPLETED' : data.status,
+    });
+    if (!value) throw new AppError('Goal not found', 404, 'GOAL_NOT_FOUND');
+    return value;
+  }
+
+  private static async assertOwnedPortfolio(userId: string, portfolioId?: string | number | null) {
+    if (portfolioId && !await PortfolioRepository.findById(portfolioId, userId)) {
+      throw new AppError('Linked portfolio not found', 404, 'PORTFOLIO_NOT_FOUND');
+    }
+  }
   public static async getTransactions(userId: string, options?: { type?: string; category?: string; startDate?: string; endDate?: string }) {
     await this.materializeRecurringTransactions(userId);
     return FinanceRepository.getTransactions(userId, options);
@@ -94,7 +118,7 @@ export class FinanceService {
         continue;
       }
       const rateInfo = await FXService.getRateInfo(sourceCurrency, currency, toIsoDate(tx.transaction_date));
-      hasSyntheticFx ||= rateInfo.freshness === 'Synthetic';
+      hasSyntheticFx ||= rateInfo.freshness.toUpperCase() === 'SYNTHETIC';
       convertedAmounts.set(tx.id, amount * rateInfo.rate);
     }
 
@@ -172,6 +196,9 @@ export class FinanceService {
         remainingAmount: Math.max(0, target - current),
         progressPercentage: round2(progressPct),
         targetDate: g.target_date ? toIsoDate(g.target_date) : null,
+        baseCurrency: g.base_currency,
+        linkedPortfolioId: g.portfolio_id,
+        status: g.status,
         ...projection,
       };
     });

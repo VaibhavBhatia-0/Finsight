@@ -36,16 +36,16 @@ export class UserRepository {
     return res.rows[0];
   }
 
-  static async findByEmail(email: string): Promise<UserRow | null> {
-    const res = await db.query<UserRow>(
+  static async findByEmail(email: string, executor: IDatabaseExecutor = db): Promise<UserRow | null> {
+    const res = await executor.query<UserRow>(
       `SELECT * FROM users WHERE email = $1;`,
       [email.toLowerCase().trim()]
     );
     return res.rows[0] || null;
   }
 
-  static async findById(id: string): Promise<UserRow | null> {
-    const res = await db.query<UserRow>(
+  static async findById(id: string, executor: IDatabaseExecutor = db): Promise<UserRow | null> {
+    const res = await executor.query<UserRow>(
       `SELECT * FROM users WHERE id = $1;`,
       [id]
     );
@@ -60,6 +60,10 @@ export class UserRepository {
   static async updatePassword(id: string, passwordHash: string, executor: IDatabaseExecutor = db): Promise<UserRow | null> {
     const result = await executor.query<UserRow>('UPDATE users SET password_hash = $1, auth_version = auth_version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *;', [passwordHash, id]);
     return result.rows[0] || null;
+  }
+
+  static async revokeSessions(id: string, executor: IDatabaseExecutor = db): Promise<void> {
+    await executor.query('UPDATE users SET auth_version = auth_version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1;', [id]);
   }
 
   static async findByGoogleSubject(subject: string): Promise<UserRow | null> {

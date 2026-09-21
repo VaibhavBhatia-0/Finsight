@@ -1,4 +1,4 @@
-type HttpMethod = 'get' | 'post' | 'put' | 'delete';
+type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
 const operation = (summary: string, secured = true, contentTypes = ['application/json']) => ({
   summary,
@@ -19,6 +19,7 @@ export const openApiDocument = {
   paths: {
     '/auth/register': path({ post: operation('Register with email and password', false) }),
     '/auth/login': path({ post: operation('Sign in with email and password', false) }),
+    '/auth/logout': path({ post: operation('Revoke the current user session generation') }),
     '/auth/me': path({ get: operation('Get the authenticated profile') }),
     '/auth/preferences': path({ put: operation('Update canonical user preferences') }),
     '/auth/verification/request': path({ post: operation('Request email verification delivery', false) }),
@@ -28,6 +29,7 @@ export const openApiDocument = {
     '/auth/google': path({ get: operation('Start Google OAuth with persisted state', false) }),
     '/auth/google/callback': path({ get: operation('Complete Google OAuth', false, ['text/html']) }),
     '/markets/overview': path({ get: operation('Get market index overview', false) }),
+    '/markets/health': path({ get: operation('Get market provider health without credentials', false) }),
     '/markets/stocks': path({ get: operation('List or search stocks', false) }),
     '/markets/stocks/{id}': path({ get: operation('Get stock detail', false) }),
     '/markets/stocks/{id}/prices': path({ get: operation('Get dated stock prices', false) }),
@@ -38,8 +40,11 @@ export const openApiDocument = {
     '/watchlists/{id}/items': path({ post: operation('Add an item to an owned watchlist') }),
     '/watchlists/{id}/items/{stockId}': path({ delete: operation('Remove an item from an owned watchlist') }),
     '/portfolios': path({ get: operation('List portfolio valuations'), post: operation('Create a portfolio') }),
-    '/portfolios/{id}': path({ get: operation('Get a portfolio valuation'), delete: operation('Delete an owned portfolio') }),
+    '/portfolios/{id}': path({ get: operation('Get a portfolio valuation'), patch: operation('Update owned portfolio benchmark and allocation targets'), delete: operation('Delete an owned portfolio') }),
     '/portfolios/{id}/transactions': path({ get: operation('Get the authoritative portfolio ledger'), post: operation('Append a validated portfolio transaction') }),
+    '/portfolios/{id}/intelligence': path({ get: operation('Calculate ledger-based performance, allocation, risk, and attribution') }),
+    '/portfolios/benchmarks': path({ get: operation('List supported portfolio benchmarks') }),
+    '/portfolios/compare': path({ post: operation('Compare owned portfolios over a synchronized period') }),
     '/scenarios/simulate': path({ post: operation('Run SINGLE, RECURRING, or PORTFOLIO scenario simulation', false) }),
     '/scenarios': path({ get: operation('List saved scenarios'), post: operation('Atomically save a scenario result') }),
     '/scenarios/compare': path({ post: operation('Persist and calculate a scenario comparison') }),
@@ -56,13 +61,17 @@ export const openApiDocument = {
     '/finance/goals/{id}': path({ put: operation('Update a savings goal'), delete: operation('Delete a savings goal') }),
     '/finance/goals/{id}/contributions': path({ post: operation('Atomically record a goal contribution') }),
     '/finance/summary': path({ get: operation('Get historical-FX-normalized finance summary') }),
+    '/planning/required-contribution': path({ post: operation('Calculate no-growth and explicit-assumption contribution requirements') }),
+    '/planning/what-if': path({ post: operation('Run a hypothetical scenario through the canonical scenario engine') }),
+    '/planning/replay': path({ post: operation('Replay an investment with actual historical observations') }),
+    '/planning/recurring': path({ post: operation('Run a dated recurring investment plan') }),
     '/insights': path({ get: operation('Get deterministic descriptive insights') }),
     '/reports/export': path({ get: operation('Export an authenticated CSV or PDF report', true, ['text/csv', 'application/pdf']) }),
   },
   components: {
     securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
     schemas: {
-      ApiEnvelope: { type: 'object', required: ['success', 'data', 'error', 'meta'], properties: { success: { const: true }, data: {}, error: { type: 'null' }, meta: { type: 'object', required: ['timestamp', 'freshness'], properties: { timestamp: { type: 'string', format: 'date-time' }, freshness: { enum: ['Live', 'Delayed', 'End-of-day', 'Historical', 'Static', 'Synthetic'] } } } } },
+      ApiEnvelope: { type: 'object', required: ['success', 'data', 'error', 'meta'], properties: { success: { const: true }, data: {}, error: { type: 'null' }, meta: { type: 'object', required: ['timestamp', 'freshness'], properties: { timestamp: { type: 'string', format: 'date-time' }, freshness: { enum: ['LIVE', 'DELAYED', 'LAST CLOSE', 'STALE', 'UNAVAILABLE', 'SYNTHETIC', 'Live', 'Delayed', 'End-of-day', 'Historical', 'Static', 'Synthetic'] } } } } },
       ApiError: { type: 'object', required: ['success', 'error'], properties: { success: { const: false }, error: { type: 'object', required: ['code', 'message'], properties: { code: { type: 'string' }, message: { type: 'string' }, details: { type: 'array' } } } } },
     },
     responses: {

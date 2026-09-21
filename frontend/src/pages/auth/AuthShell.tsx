@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import BrandLogo from '../../components/BrandLogo';
 
 export default function AuthShell({ title, children, footer }: { title: string; children: ReactNode; footer?: ReactNode }) {
   return (
@@ -7,7 +8,7 @@ export default function AuthShell({ title, children, footer }: { title: string; 
       <div className="auth-frame">
         <section className="auth-card">
           <div className="auth-card-inner">
-            <Link to="/markets" className="auth-brand"><span className="auth-brand-mark" aria-hidden="true">F</span><span>FinSight</span></Link>
+            <Link to="/markets" className="auth-brand"><BrandLogo variant="wordmark" /></Link>
             <div className="auth-heading">
               <p className="auth-kicker">Private financial workspace</p>
               <h1>{title}</h1>
@@ -21,7 +22,7 @@ export default function AuthShell({ title, children, footer }: { title: string; 
 
         <aside className="auth-showcase">
           <div className="auth-visual" aria-hidden="true">
-            <div className="auth-core"><strong>F</strong><span>FinSight</span><small>Financial intelligence</small></div>
+            <div className="auth-core"><BrandLogo variant="mark" /><small>Financial intelligence</small></div>
             <div className="auth-float auth-float-market"><small>MARKET PULSE</small><strong>NIFTY 50</strong><span>India · US coverage</span></div>
             <div className="auth-float auth-float-portfolio"><small>PORTFOLIO</small><strong>Ledger reconciled</strong><span>FX · fees · dividends</span></div>
             <div className="auth-float auth-float-lab"><small>FINSIGHT LAB</small><strong>Scenario ready</strong><span>Single · DCA · Portfolio</span></div>

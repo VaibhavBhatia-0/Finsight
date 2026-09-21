@@ -29,7 +29,7 @@ export function ScenarioForm({ title, subtitle, submitLabel, form, onSubmit, pen
   return <main className="scenario-page">
     <header className="page-heading"><div><p className="page-eyebrow">FinSight Lab · Scenario engine</p><h1>{title}</h1><p className="page-subtitle">{subtitle}</p></div><Landmark size={30} className="text-gold-400" /></header>
     <form onSubmit={handleSubmit(onSubmit)} className="panel scenario-form space-y-4">
-      <div className="panel-header"><div><h2 className="panel-title">Scenario configuration</h2><p className="panel-subtitle">Historical what-if inputs</p></div><span className="freshness-badge">Synthetic history</span></div>
+      <div className="panel-header"><div><h2 className="panel-title">Scenario configuration</h2><p className="panel-subtitle">Historical what-if inputs</p></div><span className="freshness-badge">Provider history</span></div>
       <Controller name="asset" control={control} rules={{ required: true }} render={({ field }) => <StockSearchInput label="Asset" value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} />} />
       <div className="grid grid-cols-2 gap-4"><label className="block text-sm font-medium">Start date<input type="date" {...register('startDate', { required: true })} className="mt-1 w-full px-3 py-2" /></label><label className="block text-sm font-medium">End date<input type="date" {...register('endDate', { required: true })} className="mt-1 w-full px-3 py-2" /></label></div>
       <label className="block text-sm font-medium">Investment amount<input type="number" min="0.01" step="0.01" {...register('amount', { required: true, min: 0.01, valueAsNumber: true })} className="mt-1 w-full px-3 py-2" /></label>

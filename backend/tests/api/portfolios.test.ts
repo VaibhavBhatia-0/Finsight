@@ -9,6 +9,7 @@ describe('Portfolios & Watchlists API Integration Tests', () => {
   let baseUrl: string;
   let authToken = '';
   let watchlistId = '';
+  let otherToken = '';
 
   beforeAll(async () => {
     await runMigrations();
@@ -57,7 +58,7 @@ describe('Portfolios & Watchlists API Integration Tests', () => {
     watchlistId = data.data[0].id;
   });
 
-  it('2. POST /api/v1/portfolios creates portfolio with default deposit', async () => {
+  it('2. POST /api/v1/portfolios creates portfolio with an explicit opening contribution', async () => {
     const res = await fetch(`${baseUrl}/api/v1/portfolios`, {
       method: 'POST',
       headers: {
@@ -68,6 +69,7 @@ describe('Portfolios & Watchlists API Integration Tests', () => {
         name: 'Alpha Growth Portfolio',
         baseCurrency: 'INR',
         benchmarkId: 1, // NIFTY 50
+        initialDeposit: { amount: 100000, date: '2024-01-01' },
       }),
     });
     const data = await res.json();
@@ -156,7 +158,7 @@ describe('Portfolios & Watchlists API Integration Tests', () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `watchlist_intruder_${Date.now()}@example.com`, password: 'Password123!', name: 'Other User', baseCurrency: 'INR' }),
     });
-    const otherToken = (await register.json()).data.token;
+    otherToken = (await register.json()).data.token;
     const add = await fetch(`${baseUrl}/api/v1/watchlists/${watchlistId}/items`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${otherToken}` }, body: JSON.stringify({ stockId: 2 }),
     });
@@ -196,5 +198,79 @@ describe('Portfolios & Watchlists API Integration Tests', () => {
     expect(holding.averageCost).toBe(8000);
     expect(holding.costBasis).toBe(8000);
     expect(data.data.valuation.summary.cashBalance).toBe(62700);
+  });
+
+  it('9. updates benchmark/targets and returns reconciled portfolio intelligence', async () => {
+    const update = await fetch(`${baseUrl}/api/v1/portfolios/${portfolioId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ benchmarkId: 1, allocationTargets: { RELIANCE: 60, AAPL: 30, CASH: 10 } }),
+    });
+    expect(update.status).toBe(200);
+
+    const response = await fetch(`${baseUrl}/api/v1/portfolios/${portfolioId}/intelligence`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.data.portfolio).toMatchObject({ benchmarkCode: 'NIFTY_50' });
+    expect(data.data.performance.series.length).toBeGreaterThan(1);
+    expect(data.data.performance.benchmarkReturn).not.toBeNull();
+    expect(data.data.allocation.holdings).toContainEqual(expect.objectContaining({ symbol: 'RELIANCE', targetPercentage: 60 }));
+    expect(data.data.attribution.invariant).toContain('net P&L');
+    expect(Math.abs(data.data.attribution.totals.reconciliationDifference)).toBeLessThan(0.01);
+  });
+
+  it('10. prevents another user from reading portfolio intelligence or comparing the portfolio', async () => {
+    const intelligence = await fetch(`${baseUrl}/api/v1/portfolios/${portfolioId}/intelligence`, {
+      headers: { Authorization: `Bearer ${otherToken}` },
+    });
+    const compare = await fetch(`${baseUrl}/api/v1/portfolios/compare`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${otherToken}` },
+      body: JSON.stringify({ portfolioIds: [portfolioId, Number(portfolioId) + 1] }),
+    });
+    expect(intelligence.status).toBe(404);
+    expect(compare.status).toBe(404);
+  });
+
+  it('11. compares two owned portfolios over a synchronized, rebased period', async () => {
+    const create = await fetch(`${baseUrl}/api/v1/portfolios`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({
+        name: 'Income Portfolio', baseCurrency: 'INR', benchmarkId: 1,
+        initialDeposit: { amount: 50000, date: '2024-03-01' },
+      }),
+    });
+    const secondPortfolioId = (await create.json()).data.portfolio.id;
+    const compare = await fetch(`${baseUrl}/api/v1/portfolios/compare`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ portfolioIds: [portfolioId, secondPortfolioId] }),
+    });
+    const data = await compare.json();
+    expect(compare.status).toBe(200);
+    expect(data.data.portfolios).toHaveLength(2);
+    expect(data.data.comparisonSeries).toHaveLength(2);
+    expect(data.data.portfolios[0].contributionHistory).toEqual(expect.arrayContaining([
+      expect.objectContaining({ date: '2024-01-01', type: 'DEPOSIT', baseCurrency: 'INR', baseAmount: 100000 }),
+    ]));
+    expect(data.data.portfolios[1].contributionHistory).toEqual([
+      expect.objectContaining({ date: '2024-03-01', type: 'DEPOSIT', baseCurrency: 'INR', baseAmount: 50000 }),
+    ]);
+    expect(data.data.synchronizedPeriod.startDate).toBe('2024-03-01');
+    expect(data.data.compatibility).toMatchObject({ sameCurrency: true, sameBenchmark: true });
+    expect(data.data.comparisonSeries[0].values[0].value).toBe(100);
+    expect(data.data.comparisonSeries[1].values[0].value).toBe(100);
+  });
+
+  it('12. prevents linking a savings goal to another user\'s portfolio', async () => {
+    const response = await fetch(`${baseUrl}/api/v1/finance/goals`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${otherToken}` },
+      body: JSON.stringify({
+        name: 'Unauthorized linked goal', targetAmount: 100000, currentAmount: 0,
+        baseCurrency: 'INR', portfolioId,
+      }),
+    });
+    const data = await response.json();
+    expect(response.status).toBe(404);
+    expect(data.error.code).toBe('PORTFOLIO_NOT_FOUND');
   });
 });

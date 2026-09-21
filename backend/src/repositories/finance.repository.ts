@@ -33,6 +33,9 @@ export interface SavingsGoalRow {
   current_amount: number | string;
   target_date: string | Date | null;
   created_at: string;
+  base_currency: string;
+  portfolio_id: string | null;
+  status: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
 }
 
 export interface FinanceRecurringRuleRow {
@@ -222,12 +225,15 @@ export class FinanceRepository {
     targetAmount: number;
     currentAmount?: number;
     targetDate?: string;
+    baseCurrency?: string;
+    portfolioId?: string | number | null;
+    status?: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
   }): Promise<SavingsGoalRow> {
     const res = await db.query<SavingsGoalRow>(`
-      INSERT INTO savings_goals (user_id, name, target_amount, current_amount, target_date)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO savings_goals (user_id, name, target_amount, current_amount, target_date, base_currency, portfolio_id, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *;
-    `, [userId, data.name, data.targetAmount, data.currentAmount || 0, data.targetDate || null]);
+    `, [userId, data.name, data.targetAmount, data.currentAmount || 0, data.targetDate || null, data.baseCurrency || 'INR', data.portfolioId || null, data.status || 'ACTIVE']);
     return res.rows[0];
   }
 
@@ -250,8 +256,8 @@ export class FinanceRepository {
     return res.rows[0];
   }
 
-  static async updateSavingsGoal(id: string | number, userId: string, data: { name: string; targetAmount: number; currentAmount: number; targetDate?: string }): Promise<SavingsGoalRow | null> {
-    const res = await db.query<SavingsGoalRow>(`UPDATE savings_goals SET name=$1, target_amount=$2, current_amount=$3, target_date=$4 WHERE id=$5 AND user_id=$6 RETURNING *;`, [data.name, data.targetAmount, data.currentAmount, data.targetDate || null, id, userId]);
+  static async updateSavingsGoal(id: string | number, userId: string, data: { name: string; targetAmount: number; currentAmount: number; targetDate?: string; baseCurrency?: string; portfolioId?: string | number | null; status?: 'ACTIVE' | 'PAUSED' | 'COMPLETED' }): Promise<SavingsGoalRow | null> {
+    const res = await db.query<SavingsGoalRow>(`UPDATE savings_goals SET name=$1, target_amount=$2, current_amount=$3, target_date=$4, base_currency=$5, portfolio_id=$6, status=$7 WHERE id=$8 AND user_id=$9 RETURNING *;`, [data.name, data.targetAmount, data.currentAmount, data.targetDate || null, data.baseCurrency || 'INR', data.portfolioId || null, data.status || 'ACTIVE', id, userId]);
     return res.rows[0] || null;
   }
 
@@ -278,7 +284,10 @@ export class FinanceRepository {
         VALUES ($1, $2, $3, $4) RETURNING *;
       `, [id, data.amount, data.contributionDate, data.notes || null]);
       const updated = await executor.query<SavingsGoalRow>(`
-        UPDATE savings_goals SET current_amount = current_amount + $1 WHERE id = $2 RETURNING *;
+        UPDATE savings_goals
+        SET current_amount = current_amount + $1,
+            status = CASE WHEN current_amount + $1 >= target_amount THEN 'COMPLETED' ELSE status END
+        WHERE id = $2 RETURNING *;
       `, [data.amount, id]);
       return { contribution: contribution.rows[0], goal: updated.rows[0] };
     });

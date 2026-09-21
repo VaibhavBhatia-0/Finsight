@@ -1,5 +1,5 @@
 import { AppError } from '../../middleware/errorHandler';
-import type { StockQuote } from './mockProvider';
+import type { StockQuote } from './types';
 
 interface TwelveDataQuote {
   symbol?: string;
@@ -37,6 +37,7 @@ export class TwelveDataMarketDataProvider {
     if (!Number.isFinite(price) || price <= 0) throw new AppError('Market-data provider returned an invalid quote', 503, 'MARKET_DATA_INVALID');
     return {
       symbol: value.symbol || symbol.toUpperCase(),
+      providerSymbol: value.symbol || symbol.toUpperCase(), provider: 'TWELVE_DATA', exchange: exchange || 'UNKNOWN', currency: 'N/A',
       price,
       change: finite(value.change, price - previousClose),
       changePercent: finite(value.percent_change, previousClose > 0 ? (price - previousClose) / previousClose * 100 : 0),
@@ -45,8 +46,10 @@ export class TwelveDataMarketDataProvider {
       low: finite(value.low, price),
       previousClose: Number.isFinite(previousClose) && previousClose > 0 ? previousClose : price,
       volume: Math.max(0, finite(value.volume, 0)),
-      freshness: 'Delayed',
-      timestamp: timestamp(value.datetime),
+      fiftyTwoWeekHigh: null, fiftyTwoWeekLow: null,
+      freshness: 'DELAYED', freshnessLabel: 'DELAYED', marketStatus: 'UNKNOWN',
+      marketTimestamp: timestamp(value.datetime), timestamp: timestamp(value.datetime), fetchedAt: new Date().toISOString(), freshnessSeconds: 0,
+      isDelayed: true, isStale: false,
       source: 'TWELVE_DATA',
     };
   }

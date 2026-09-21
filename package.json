@@ -13,6 +13,8 @@
     "dev:frontend": "node scripts/dev.mjs",
     "dev:web": "npm run dev:web --workspace=frontend",
     "dev:all": "node scripts/dev.mjs",
+    "universe:sync": "npm run migrate --workspace=backend && npm run seed --workspace=backend && npm run universe:sync --workspace=backend",
+    "market:verify": "npm run market:verify --workspace=backend",
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "test:db": "npm run test:db --workspace=backend",

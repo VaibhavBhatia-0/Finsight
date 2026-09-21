@@ -7,7 +7,8 @@ export class ScenarioController {
   static async runSimulation(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await ScenarioService.runSimulation(req.body);
-      sendSuccess(res, result, 200, 'Synthetic', { source: 'FINSIGHT_DEVELOPMENT_FIXTURE', degraded: true });
+      const test = process.env.NODE_ENV === 'test';
+      sendSuccess(res, result, 200, test ? 'SYNTHETIC' : 'Historical', { source: test ? 'FINSIGHT_TEST_FIXTURE' : 'YAHOO_FINANCE_CHART', degraded: false });
     } catch (error) {
       next(error);
     }

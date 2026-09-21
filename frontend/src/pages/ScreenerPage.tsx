@@ -105,7 +105,7 @@ export const ScreenerPage: React.FC = () => {
 
   return (
     <main>
-      <header className="page-heading"><div><p className="page-eyebrow">Invest</p><h1 className="flex items-center"><Search className="mr-3 text-gold-400" aria-hidden="true" /> Stock screener</h1><p className="page-subtitle">Combine valuation, fundamentals, liquidity, momentum, and moving-average filters against the development catalogue.</p></div><FreshnessBadge freshness="Synthetic" /></header>
+      <header className="page-heading"><div><p className="page-eyebrow">Invest</p><h1 className="flex items-center"><Search className="mr-3 text-gold-400" aria-hidden="true" /> Stock screener</h1><p className="page-subtitle">Filter the real security universe. Metrics without a sourced observation remain N/A; quote and fundamental sorts apply only to the visible page to avoid an expensive live-quote fan-out.</p></div>{displayedStocks[0] && <FreshnessBadge freshness={displayedStocks[0].quote.freshnessLabel} timestamp={displayedStocks[0].quote.marketTimestamp} />}</header>
       <section
         className="panel screener-filter-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 p-4 border rounded"
         aria-label="Filter panel"
@@ -204,13 +204,13 @@ export const ScreenerPage: React.FC = () => {
                   <td className="px-4 py-2">{stock.price.toFixed(2)}</td>
                   <td className="px-4 py-2">{stock.exchange}</td>
                   <td className="px-4 py-2">{stock.sector}</td>
-                  <td className="px-4 py-2">{Intl.NumberFormat("en-US", { notation: "compact" }).format(stock.marketCap)}</td>
-                  <td className="px-4 py-2">{stock.peRatio.toFixed(2)}</td>
-                  <td className="px-4 py-2">{stock.eps.toFixed(2)}</td>
-                  <td className="px-4 py-2">{stock.dividendYield.toFixed(2)}%</td>
-                  <td className="px-4 py-2">{stock.rsi14.toFixed(2)}</td>
-                  <td className="px-4 py-2">{stock.yearPosition.toFixed(2)}%</td>
-                  <td className="px-4 py-2"><FreshnessBadge freshness="Synthetic" /></td>
+                  <td className="px-4 py-2">{optionalCompact(stock.marketCap)}</td>
+                  <td className="px-4 py-2">{optionalNumber(stock.peRatio)}</td>
+                  <td className="px-4 py-2">{optionalNumber(stock.eps)}</td>
+                  <td className="px-4 py-2">{optionalPercent(stock.dividendYield)}</td>
+                  <td className="px-4 py-2">{optionalNumber(stock.rsi14)}</td>
+                  <td className="px-4 py-2">{optionalPercent(stock.yearPosition)}</td>
+                  <td className="px-4 py-2"><FreshnessBadge freshness={stock.quote.freshnessLabel} timestamp={stock.quote.marketTimestamp} /></td>
                   <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
                     <button onClick={() => user ? watchlist.addToWatchlist(stock.id) : navigate('/login')} className="text-primary hover:text-primary-dark" aria-label={`Add ${stock.symbol} to watchlist`}>
                       <Plus size={16} aria-hidden="true" />
@@ -234,3 +234,7 @@ export const ScreenerPage: React.FC = () => {
 };
 
 export default ScreenerPage;
+
+function optionalNumber(value: number | null) { return value == null ? 'N/A' : value.toFixed(2); }
+function optionalPercent(value: number | null) { return value == null ? 'N/A' : `${value.toFixed(2)}%`; }
+function optionalCompact(value: number | null) { return value == null ? 'N/A' : Intl.NumberFormat('en-US', { notation: 'compact' }).format(value); }

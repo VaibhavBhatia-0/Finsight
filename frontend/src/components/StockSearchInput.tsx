@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import api from '../api/client';
-import type { MarketStock } from '../api/contracts';
+import type { MarketStocksResponse } from '../api/contracts';
 import { endpoints } from '../api/endpoints';
 
 interface StockSearchInputProps {
@@ -18,7 +18,7 @@ export default function StockSearchInput({ label, value, onChange, onBlur, place
   const closeTimer = useRef<ReturnType<typeof setTimeout>>();
   const query = useQuery({
     queryKey: ['lab-stock-search', value],
-    queryFn: async () => (await api.get<MarketStock[]>(endpoints.markets.stocks, { params: { q: value.trim() } })).data,
+    queryFn: async () => (await api.get<MarketStocksResponse>(endpoints.markets.stocks, { params: { q: value.trim(), limit: 20 } })).data.items,
     enabled: open,
     staleTime: 5 * 60 * 1000,
   });
@@ -54,7 +54,7 @@ export default function StockSearchInput({ label, value, onChange, onBlur, place
           </button>
         ))}
         {!query.isPending && query.data?.length === 0 && <span className="stock-search-state">No matching listed asset.</span>}
-        <span className="stock-search-source">Development catalogue · quotes may be synthetic</span>
+        <span className="stock-search-source">Real security universe · visible quotes only</span>
       </span>}
     </label>
   );

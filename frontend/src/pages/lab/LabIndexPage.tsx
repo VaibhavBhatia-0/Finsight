@@ -17,7 +17,7 @@ export default function LabIndexPage() {
       </header>
 
       <section className="mb-8">
-        <div className="panel-header"><div><h2 className="panel-title">Scenario engine</h2><p className="panel-subtitle">Single, recurring, and portfolio simulations use distinct calculation paths.</p></div><span className="freshness-badge">Synthetic history</span></div>
+        <div className="panel-header"><div><h2 className="panel-title">Scenario engine</h2><p className="panel-subtitle">Single, recurring, and portfolio simulations use distinct calculation paths.</p></div><span className="freshness-badge">Provider history</span></div>
         <div className="lab-tool-grid">
           {scenarioTools.map(({ to, icon: Icon, title, tag, description }) => (
             <Link className="lab-tool-card" to={to} key={to}>

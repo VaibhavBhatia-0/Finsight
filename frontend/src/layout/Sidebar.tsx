@@ -5,6 +5,7 @@ import {
   Gauge, Landmark, LineChart, ListChecks, ReceiptText, Repeat2, SearchCode,
   Settings, Sparkles, Star, Target, WalletCards,
 } from 'lucide-react';
+import BrandLogo from '../components/BrandLogo';
 
 interface NavItem {
   to: string;
@@ -34,13 +35,19 @@ const groups: Array<{ label: string; items: NavItem[] }> = [
     ],
   },
   {
+    label: 'Plan',
+    items: [
+      { to: '/planning', label: 'Investment planning', icon: Target },
+      { to: '/finance/goals', label: 'Goals', icon: Sparkles },
+    ],
+  },
+  {
     label: 'Finance',
     items: [
       { to: '/finance/transactions', label: 'Transactions', icon: WalletCards },
       { to: '/finance/expenses', label: 'Expenses', icon: ReceiptText },
       { to: '/finance/budgets', label: 'Budgets', icon: ListChecks },
       { to: '/finance/savings', label: 'Savings', icon: Sparkles },
-      { to: '/finance/goals', label: 'Goals', icon: Target },
     ],
   },
   {
@@ -57,8 +64,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="sidebar-shell" aria-label="Primary navigation">
       <NavLink to="/dashboard" className="brand-lockup" onClick={onNavigate}>
-        <span className="brand-mark" aria-hidden="true">F</span>
-        <span className="brand-word">Fin<span>Sight</span></span>
+        <BrandLogo variant="lockup" />
       </NavLink>
 
       {groups.map((group, groupIndex) => (
@@ -82,7 +88,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </NavLink>
         <div className="sidebar-status">
           <strong>Research workspace</strong>
-          Simulations are educational. Market fixtures are labelled at every decision point.
+          Simulations are educational. Provider provenance is shown at every decision point.
         </div>
       </div>
     </nav>

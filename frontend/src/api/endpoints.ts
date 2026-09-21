@@ -5,6 +5,7 @@ const pathId = (id: ApiId) => encodeURIComponent(String(id));
 export const endpoints = {
   auth: {
     login: '/api/v1/auth/login',
+    logout: '/api/v1/auth/logout',
     register: '/api/v1/auth/register',
     me: '/api/v1/auth/me',
     preferences: '/api/v1/auth/preferences',
@@ -16,6 +17,7 @@ export const endpoints = {
   },
   markets: {
     overview: '/api/v1/markets/overview',
+    health: '/api/v1/markets/health',
     stocks: '/api/v1/markets/stocks',
     stock: (idOrSymbol: ApiId) => `/api/v1/markets/stocks/${pathId(idOrSymbol)}`,
     stockPrices: (id: ApiId) => `/api/v1/markets/stocks/${pathId(id)}/prices`,
@@ -34,6 +36,15 @@ export const endpoints = {
     create: '/api/v1/portfolios',
     detail: (portfolioId: ApiId) => `/api/v1/portfolios/${pathId(portfolioId)}`,
     transactions: (portfolioId: ApiId) => `/api/v1/portfolios/${pathId(portfolioId)}/transactions`,
+    intelligence: (portfolioId: ApiId) => `/api/v1/portfolios/${pathId(portfolioId)}/intelligence`,
+    benchmarks: '/api/v1/portfolios/benchmarks',
+    compare: '/api/v1/portfolios/compare',
+  },
+  planning: {
+    requiredContribution: '/api/v1/planning/required-contribution',
+    whatIf: '/api/v1/planning/what-if',
+    replay: '/api/v1/planning/replay',
+    recurring: '/api/v1/planning/recurring',
   },
   scenarios: {
     simulate: '/api/v1/scenarios/simulate',

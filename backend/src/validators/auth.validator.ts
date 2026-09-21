@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const registerSchema = z.object({
   email: z.string().email('Valid email is required'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(128),
   name: z.string().min(1, 'Name cannot be empty').optional(),
   baseCurrency: z.enum(['INR', 'USD', 'EUR', 'GBP']).default('INR'),
 });
@@ -15,7 +15,11 @@ export const loginSchema = z.object({
 export const emailActionRequestSchema = z.object({ email: z.string().email('Valid email is required') });
 export const verifyEmailSchema = z.object({ token: z.string().min(32).max(200) });
 export const resetPasswordSchema = z.object({ token: z.string().min(32).max(200), password: z.string().min(8).max(128) });
-export const googleCallbackQuerySchema = z.object({ code: z.string().min(1).max(4096), state: z.string().min(32).max(200) });
+export const googleCallbackQuerySchema = z.object({
+  code: z.string().min(1).max(4096).optional(),
+  state: z.string().min(32).max(200),
+  error: z.string().min(1).max(100).optional(),
+}).refine(value => Boolean(value.code) !== Boolean(value.error), { message: 'Exactly one of code or error is required' });
 
 export const updatePreferencesSchema = z.object({
   theme: z.enum(['dark', 'light', 'system']).optional(),

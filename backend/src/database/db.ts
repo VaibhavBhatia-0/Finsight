@@ -134,5 +134,11 @@ export const db = {
   },
   async transaction<T>(callback: (executor: IDatabaseExecutor) => Promise<T>): Promise<T> {
     return getDatabaseClient().transaction(callback);
+  },
+  async close(): Promise<void> {
+    if (!dbInstance) return;
+    const client = dbInstance;
+    dbInstance = null;
+    await client.close();
   }
 };

@@ -24,7 +24,9 @@ export class ScenarioService {
     taxRuleId?: string | number;
     taxJurisdiction?: 'IN' | 'US';
     feeRate?: number;
-    contributionFrequency?: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
+    contributionFrequency?: 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
+    contributionGrowthRate?: number;
+    portfolioRecurring?: boolean;
     assets?: Array<{ stockId?: string | number; symbol?: string; weight: number }>;
   }) {
     const mode = input.scenarioType || 'SINGLE_INVESTMENT';
@@ -39,7 +41,7 @@ export class ScenarioService {
     if (input.benchmarkCode) {
       const benchStock = await StockRepository.findBySymbol(input.benchmarkCode);
       if (benchStock) {
-        benchmarkPrices = await MarketDataService.getPriceHistory(benchStock.id, benchStock.symbol, input.startDate, input.endDate);
+        benchmarkPrices = await MarketDataService.getPriceHistory(benchStock.id, benchStock.symbol, input.startDate, input.endDate, benchStock.exchange_code);
       }
     }
 
@@ -56,6 +58,8 @@ export class ScenarioService {
       tax_rate: tax.rate,
       tax_exemption: tax.exemptionAmount,
       contribution_frequency: input.contributionFrequency || 'MONTHLY',
+      contribution_growth_rate: input.contributionGrowthRate ?? 0,
+      portfolio_recurring: input.portfolioRecurring ?? false,
     };
 
     if (mode === 'PORTFOLIO_SCENARIO') {
@@ -65,13 +69,13 @@ export class ScenarioService {
       const preparedAssets = await Promise.all(input.assets.map(asset => this.prepareAsset(asset, input)));
       const simulationResult = await AnalyticsService.runScript('simulations/simulator.py', { ...payload, assets: preparedAssets.map(({ stock: _stock, ...data }) => data) });
       const { assets: assetResults, ...portfolioResult } = simulationResult;
-      return { ...portfolioResult, taxMethodology: tax, assets: preparedAssets.map(({ stock, weight }) => ({ ...stock, weight })), assetResults };
+      return { ...portfolioResult, baseCurrency: input.baseCurrency, taxMethodology: tax, assets: preparedAssets.map(({ stock, weight }) => ({ ...stock, weight })), assetResults, provenance: provenance(input) };
     }
 
     const prepared = await this.prepareAsset({ stockId: input.stockId, symbol: input.symbol, weight: 1 }, input);
     const { stock, weight: _weight, ...assetPayload } = prepared;
     const simulationResult = await AnalyticsService.runScript('simulations/simulator.py', { ...payload, ...assetPayload });
-    return { stock, taxMethodology: tax, ...simulationResult };
+    return { stock, baseCurrency: input.baseCurrency, taxMethodology: tax, ...simulationResult, provenance: provenance(input) };
   }
 
   private static async prepareAsset(
@@ -80,23 +84,43 @@ export class ScenarioService {
   ) {
     const stock = selection.stockId ? await StockRepository.findById(selection.stockId) : selection.symbol ? await StockRepository.findBySymbol(selection.symbol) : null;
     if (!stock) throw new AppError('A valid stock must be selected for the simulation', 400, 'INVALID_STOCK');
-    const prices = await MarketDataService.getPriceHistory(stock.id, stock.symbol, input.startDate, input.endDate);
+    const prices = await MarketDataService.getPriceHistory(stock.id, stock.symbol, input.startDate, input.endDate, stock.exchange_code);
     if (!prices.length) throw new AppError(`No price observations found for ${stock.symbol} in the given period`, 400, 'NO_DATA');
-    const dividends = (await StockRepository.getDividends(stock.id)).filter(row => row.ex_date > input.startDate && row.ex_date <= input.endDate);
-    const corporateActions = (await StockRepository.getCorporateActions(stock.id)).filter(row => row.action_date > input.startDate && row.action_date <= input.endDate);
+    const [storedDividends, storedActions, providerEvents] = await Promise.all([
+      StockRepository.getDividends(stock.id), StockRepository.getCorporateActions(stock.id),
+      MarketDataService.getProviderCorporateActionsBetween(stock.symbol, stock.exchange_code, input.startDate, input.endDate),
+    ]);
+    const dividends = dedupeBy(
+      [
+        ...storedDividends,
+        ...providerEvents.filter(event => event.type === 'DIVIDEND').map(event => ({ ex_date: event.date, amount: event.amount, currency: event.currency, source: event.source })),
+      ].filter(row => row.ex_date > input.startDate && row.ex_date <= input.endDate),
+      row => `${row.ex_date}:${Number(row.amount).toFixed(8)}`,
+    );
+    const corporateActions = dedupeBy(
+      [
+        ...storedActions,
+        ...providerEvents.filter(event => event.type === 'SPLIT').map(event => ({ action_date: event.date, action_type: 'SPLIT', ratio: event.ratio, source: event.source })),
+      ].filter(row => row.action_date > input.startDate && row.action_date <= input.endDate),
+      row => `${row.action_date}:${row.action_type}:${Number(row.ratio).toFixed(8)}`,
+    );
     const fxDates = new Set<string>([input.startDate, input.endDate, ...dividends.map(row => row.ex_date)]);
     if (input.scenarioType === 'RECURRING_INVESTMENT') {
-      const step = input.contributionFrequency === 'QUARTERLY' ? 3 : input.contributionFrequency === 'ANNUALLY' ? 12 : 1;
       let cursor = new Date(`${input.startDate}T00:00:00Z`);
       const end = new Date(`${input.endDate}T00:00:00Z`);
       while (cursor <= end) {
         const scheduled = cursor.toISOString().slice(0, 10);
         const trade = prices.find(row => row.date >= scheduled);
         if (trade && trade.date <= input.endDate) fxDates.add(trade.date);
-        const day = cursor.getUTCDate();
-        cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + step, 1));
-        const lastDay = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0)).getUTCDate();
-        cursor.setUTCDate(Math.min(day, lastDay));
+        if (input.contributionFrequency === 'WEEKLY') {
+          cursor.setUTCDate(cursor.getUTCDate() + 7);
+        } else {
+          const step = input.contributionFrequency === 'QUARTERLY' ? 3 : input.contributionFrequency === 'ANNUALLY' ? 12 : 1;
+          const day = cursor.getUTCDate();
+          cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + step, 1));
+          const lastDay = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0)).getUTCDate();
+          cursor.setUTCDate(Math.min(day, lastDay));
+        }
       }
     }
     const exchangeRates = await Promise.all([...fxDates].map(async date => ({
@@ -223,4 +247,22 @@ function nullableNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter(item => { const value = key(item); if (seen.has(value)) return false; seen.add(value); return true; });
+}
+
+function provenance(input: { startDate: string; endDate: string }) {
+  const test = process.env.NODE_ENV === 'test';
+  return {
+    marketDataSource: test ? 'FINSIGHT_TEST_FIXTURE' : 'YAHOO_FINANCE_CHART',
+    dataRange: { start: input.startDate, end: input.endDate },
+    retrievedAt: new Date().toISOString(),
+    fxSource: test ? 'FINSIGHT_TEST_FIXTURE' : 'YAHOO_FINANCE_CHART',
+    corporateActionMethodology: 'Unadjusted close with effective-date provider/database dividends and splits; adjusted prices are not split-adjusted a second time.',
+    feeMethodology: 'Entry and exit fee rates are applied explicitly and deducted from net value.',
+    taxMethodology: 'Effective-dated educational tax estimate; not tax advice.',
+  };
 }

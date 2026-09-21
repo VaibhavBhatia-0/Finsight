@@ -169,4 +169,9 @@ export class AuthService {
       return { reset: true };
     });
   }
+
+  static async logout(userId: string) {
+    await UserRepository.revokeSessions(userId);
+    return { loggedOut: true };
+  }
 }

@@ -43,13 +43,14 @@ describe('Markets & FX API Integration Tests (/api/v1/markets)', () => {
 
     expect(res.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(data.data.length).toBeGreaterThan(0);
+    expect(data.data.items.length).toBeGreaterThan(0);
+    expect(data.data.pagination).toMatchObject({ page: 1, total: 8 });
 
-    const reliance = data.data.find((s: any) => s.symbol === 'RELIANCE');
+    const reliance = data.data.items.find((s: any) => s.symbol === 'RELIANCE');
     expect(reliance).toBeDefined();
     expect(reliance.quote.price).toBeGreaterThan(0);
 
-    const nvda = data.data.find((s: any) => s.symbol === 'NVDA');
+    const nvda = data.data.items.find((s: any) => s.symbol === 'NVDA');
     expect(nvda).toBeDefined();
     expect(nvda.quote.price).toBeGreaterThan(0);
   });
@@ -60,15 +61,15 @@ describe('Markets & FX API Integration Tests (/api/v1/markets)', () => {
 
     expect(res.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(data.data.length).toBe(1);
-    expect(data.data[0].symbol).toBe('NVDA');
+    expect(data.data.items.length).toBe(1);
+    expect(data.data.items[0].symbol).toBe('NVDA');
   });
 
   it('4. GET /api/v1/markets/stocks/:id returns detail with fundamentals', async () => {
     // Get list first to grab an ID
     const listRes = await fetch(`${baseUrl}/api/v1/markets/stocks`);
     const listData = await listRes.json();
-    const stockId = listData.data[0].id;
+    const stockId = listData.data.items[0].id;
 
     const res = await fetch(`${baseUrl}/api/v1/markets/stocks/${stockId}`);
     const data = await res.json();
@@ -79,21 +80,23 @@ describe('Markets & FX API Integration Tests (/api/v1/markets)', () => {
     expect(data.data.fundamentals).toBeDefined();
     expect(data.data.fundamentals.peRatio).toBeGreaterThan(0);
     expect(data.data.fundamentals.marketCap).toBeGreaterThan(0);
+    expect(data.data.quote.source).toBe('FINSIGHT_TEST_FIXTURE');
   });
 
   it('5. GET /api/v1/markets/stocks/:id/prices caches and returns OHLCV series', async () => {
     const listRes = await fetch(`${baseUrl}/api/v1/markets/stocks`);
     const listData = await listRes.json();
-    const stockId = listData.data[0].id;
+    const stockId = listData.data.items[0].id;
 
     const res = await fetch(`${baseUrl}/api/v1/markets/stocks/${stockId}/prices`);
     const data = await res.json();
 
     expect(res.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(data.data.length).toBeGreaterThan(50);
-    expect(data.data[0].close).toBeGreaterThan(0);
-    expect(data.data[0].date).toBeDefined();
+    expect(data.data.bars.length).toBeGreaterThan(50);
+    expect(data.data.bars[0].close).toBeGreaterThan(0);
+    expect(data.data.bars[0].date).toBeDefined();
+    expect(data.data.provider).toBe('FINSIGHT_TEST_FIXTURE');
   });
 
   it('6. GET /api/v1/markets/screener filters by multi-parameter criteria', async () => {

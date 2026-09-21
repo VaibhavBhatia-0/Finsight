@@ -4,6 +4,8 @@ import { FXService } from './fx.service';
 import { AppError } from '../middleware/errorHandler';
 import { StockRepository } from '../repositories/stock.repository';
 import { db, IDatabaseExecutor } from '../database/db';
+import { AnalyticsService } from './analytics.service';
+import { BENCHMARKS_BY_SYMBOL, BENCHMARK_SYMBOL_BY_CODE } from '../config/benchmarks';
 
 export class PortfolioService {
   /**
@@ -17,6 +19,7 @@ export class PortfolioService {
     let totalWithdrawn = 0;
     let totalFees = 0;
     let totalDividends = 0;
+    let totalTaxes = 0;
     let realizedPnL = 0;
 
     // Stock ID -> { quantity, totalCost, avgCost }
@@ -30,7 +33,7 @@ export class PortfolioService {
       const txCurrency = tx.currency.toUpperCase();
       const fxRate = txCurrency === baseCurrency.toUpperCase()
         ? 1
-        : Number(tx.fx_rate) || await FXService.getRate(txCurrency, baseCurrency, tx.transaction_date);
+        : Number(tx.fx_rate) || await FXService.getRate(txCurrency, baseCurrency, isoDate(tx.transaction_date));
       const amountBase = amount * fxRate;
       const feeBase = fee * fxRate;
 
@@ -101,6 +104,11 @@ export class PortfolioService {
         case 'FEE':
           cashBalance -= amountBase;
           break;
+
+        case 'TAX':
+          cashBalance -= amountBase;
+          totalTaxes += amountBase;
+          break;
       }
     }
 
@@ -117,6 +125,7 @@ export class PortfolioService {
       totalWithdrawn,
       totalFees,
       totalDividends,
+      totalTaxes,
       realizedPnL,
       holdingsMap,
     };
@@ -196,6 +205,7 @@ export class PortfolioService {
         benchmarkCode: portfolio.benchmark_code,
         benchmarkName: portfolio.benchmark_name,
         createdAt: portfolio.created_at,
+        allocationTargets: portfolio.allocation_targets || {},
       },
       summary: {
         totalValue: round2(totalPortfolioValue),
@@ -209,6 +219,7 @@ export class PortfolioService {
         totalReturnPercentage: round2(totalReturnPct),
         dividendsEarned: round2(state.totalDividends),
         feesPaid: round2(state.totalFees),
+        taxesPaid: round2(state.totalTaxes),
       },
       holdings: holdingsWithWeights,
       risk: {
@@ -228,7 +239,7 @@ export class PortfolioService {
     }
 
     const transactionType = String(txData.transactionType || '').toUpperCase();
-    const supportedTypes = ['BUY', 'SELL', 'DIVIDEND', 'SPLIT', 'DEPOSIT', 'WITHDRAWAL', 'FEE'];
+    const supportedTypes = ['BUY', 'SELL', 'DIVIDEND', 'SPLIT', 'DEPOSIT', 'WITHDRAWAL', 'FEE', 'TAX'];
     if (!supportedTypes.includes(transactionType)) throw new AppError('Unsupported transaction type', 400, 'INVALID_TRANSACTION');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(txData.transactionDate || ''))) throw new AppError('A valid transaction date is required', 400, 'INVALID_TRANSACTION');
 
@@ -298,8 +309,176 @@ export class PortfolioService {
       return tx;
     });
   }
+
+  public static async updatePortfolio(userId: string, portfolioId: string | number, data: {
+    name?: string;
+    benchmarkId?: string | number | null;
+    allocationTargets?: Record<string, number>;
+  }) {
+    if (data.benchmarkId != null) {
+      const benchmarks = await PortfolioRepository.listBenchmarks();
+      if (!benchmarks.some(row => String(row.id) === String(data.benchmarkId))) {
+        throw new AppError('Unsupported benchmark', 400, 'INVALID_BENCHMARK');
+      }
+    }
+    const updated = await PortfolioRepository.update(portfolioId, userId, data);
+    if (!updated) throw new AppError('Portfolio not found', 404, 'PORTFOLIO_NOT_FOUND');
+    return this.getValuation(portfolioId, userId);
+  }
+
+  public static async getIntelligence(portfolioId: string | number, userId: string) {
+    const portfolio = await PortfolioRepository.findById(portfolioId, userId);
+    if (!portfolio) throw new AppError('Portfolio not found', 404, 'PORTFOLIO_NOT_FOUND');
+    const transactions = await PortfolioRepository.getTransactions(portfolioId);
+    if (!transactions.length) {
+      return this.runPortfolioAnalytics(portfolio, transactions, []);
+    }
+
+    const startDate = isoDate(transactions[0].transaction_date);
+    const endDate = new Date().toISOString().slice(0, 10);
+    const stockRows = new Map<string, any>();
+    for (const tx of transactions) {
+      if (tx.stock_id && !stockRows.has(String(tx.stock_id))) stockRows.set(String(tx.stock_id), tx);
+    }
+    const assets = await Promise.all([...stockRows.entries()].map(async ([stockId, tx]) => {
+      const prices = await MarketDataService.getPriceHistory(stockId, tx.symbol!, startDate, endDate, tx.exchange_code || undefined);
+      if (!prices.length) throw new AppError(`Historical prices are unavailable for ${tx.symbol}`, 503, 'PORTFOLIO_HISTORY_UNAVAILABLE');
+      const fxRates = await FXService.getRateSeries(tx.asset_currency!, portfolio.base_currency, prices.map(row => row.date));
+      return {
+        stock_id: stockId,
+        symbol: tx.symbol,
+        name: tx.company_name,
+        sector: tx.sector,
+        industry: tx.industry,
+        country: tx.country_code,
+        currency: tx.asset_currency,
+        exchange: tx.exchange_code,
+        asset_class: 'Equity',
+        prices: prices.map(row => ({ date: row.date, close: row.close })),
+        fx_rates: fxRates.map(row => ({ date: row.date, rate: row.rate })),
+      };
+    }));
+    return this.runPortfolioAnalytics(portfolio, transactions, assets);
+  }
+
+  private static async runPortfolioAnalytics(portfolio: any, transactions: PortfolioTxRow[], assets: any[]) {
+    const benchmarkSymbol = portfolio.benchmark_code ? BENCHMARK_SYMBOL_BY_CODE[portfolio.benchmark_code] : undefined;
+    const startDate = transactions[0] ? isoDate(transactions[0].transaction_date) : undefined;
+    const endDate = new Date().toISOString().slice(0, 10);
+    let benchmark: any = undefined;
+    if (benchmarkSymbol && startDate) {
+      const config = BENCHMARKS_BY_SYMBOL[benchmarkSymbol];
+      const prices = await MarketDataService.getExternalPriceHistory(benchmarkSymbol, config.exchange, startDate, endDate);
+      const fxRates = await FXService.getRateSeries(config.currency, portfolio.base_currency, prices.map(row => row.date));
+      benchmark = {
+        code: config.code, name: config.name, currency: config.currency,
+        prices: prices.map(row => ({ date: row.date, close: row.adjusted_close ?? row.close })),
+        fx_rates: fxRates.map(row => ({ date: row.date, rate: row.rate })),
+      };
+    }
+    const result = await AnalyticsService.runScript('portfolio/intelligence.py', {
+      base_currency: portfolio.base_currency,
+      end_date: endDate,
+      allocation_targets: typeof portfolio.allocation_targets === 'string' ? JSON.parse(portfolio.allocation_targets) : portfolio.allocation_targets,
+      source: process.env.NODE_ENV === 'test' ? 'FINSIGHT_TEST_FIXTURE' : 'YAHOO_FINANCE_CHART',
+      transactions: transactions.map(tx => ({
+        id: tx.id, type: tx.transaction_type, date: isoDate(tx.transaction_date), stock_id: tx.stock_id,
+        quantity: nullableNumber(tx.quantity), price: nullableNumber(tx.price), amount: Number(tx.amount),
+        fee_amount: Number(tx.fee_amount || 0), fx_rate: tx.fx_rate == null ? 1 : Number(tx.fx_rate),
+      })),
+      assets,
+      benchmark,
+    });
+    return {
+      portfolio: {
+        id: portfolio.id, name: portfolio.name, baseCurrency: portfolio.base_currency,
+        benchmarkId: portfolio.benchmark_id, benchmarkCode: portfolio.benchmark_code,
+        benchmarkName: portfolio.benchmark_name, allocationTargets: portfolio.allocation_targets || {},
+      },
+      ...result,
+      methodology: {
+        prices: 'Provider historical closes; ledger split entries are applied chronologically and are not applied twice.',
+        fx: 'Transaction-date FX for ledger cash flows and valuation-date FX for historical positions.',
+        attribution: 'FIFO lots; price return + FX impact + dividends - fees - taxes reconciles to net P&L.',
+        disclaimer: 'Historical analysis and hypothetical planning are educational, not investment or tax advice.',
+      },
+    };
+  }
+
+  public static async comparePortfolios(userId: string, portfolioIds: Array<string | number>) {
+    const ids = [...new Set(portfolioIds.map(String))];
+    if (ids.length < 2 || ids.length > 4) throw new AppError('Select between two and four unique portfolios', 400, 'INVALID_COMPARISON');
+    const results = await Promise.all(ids.map(id => this.getIntelligence(id, userId)));
+    const contributionHistories = await Promise.all(ids.map(async (id, index) => {
+      const baseCurrency = results[index].portfolio.baseCurrency;
+      const transactions = await PortfolioRepository.getTransactions(id);
+      return Promise.all(transactions
+        .filter(tx => tx.transaction_type === 'DEPOSIT' || tx.transaction_type === 'WITHDRAWAL')
+        .map(async tx => {
+          const date = isoDate(tx.transaction_date);
+          const currency = tx.currency.toUpperCase();
+          const fxRate = currency === baseCurrency
+            ? 1
+            : Number(tx.fx_rate) || await FXService.getRate(currency, baseCurrency, date);
+          const direction = tx.transaction_type === 'DEPOSIT' ? 1 : -1;
+          return {
+            date,
+            type: tx.transaction_type,
+            currency,
+            amount: round2(Number(tx.amount)),
+            baseCurrency,
+            baseAmount: round2(Number(tx.amount) * fxRate * direction),
+          };
+        }));
+    }));
+    const starts = results.map(item => item.performance?.startDate).filter(Boolean).sort();
+    const ends = results.map(item => item.performance?.endDate).filter(Boolean).sort();
+    const synchronizedStart = starts.length ? starts[starts.length - 1] : null;
+    const synchronizedEnd = ends.length ? ends[0] : null;
+    const currencies = [...new Set(results.map(item => item.portfolio.baseCurrency))];
+    const benchmarks = [...new Set(results.map(item => item.portfolio.benchmarkCode || 'NONE'))];
+    const seriesByPortfolio = results.map(item => {
+      const series = (item.performance?.series || []).filter((row: any) =>
+        (!synchronizedStart || row.date >= synchronizedStart) && (!synchronizedEnd || row.date <= synchronizedEnd),
+      );
+      const origin = series[0]?.portfolioNormalized || 100;
+      return {
+        portfolioId: item.portfolio.id,
+        name: item.portfolio.name,
+        values: series.map((row: any) => ({ date: row.date, value: round2(row.portfolioNormalized / origin * 100) })),
+      };
+    });
+    return {
+      portfolios: results.map((item, index) => ({
+        portfolio: item.portfolio,
+        performance: item.performance,
+        risk: item.risk,
+        allocation: item.allocation,
+        contributionHistory: contributionHistories[index],
+      })),
+      synchronizedPeriod: { startDate: synchronizedStart, endDate: synchronizedEnd },
+      comparisonSeries: seriesByPortfolio,
+      compatibility: {
+        currencies, benchmarks,
+        sameCurrency: currencies.length === 1,
+        sameBenchmark: benchmarks.length === 1,
+        differentStartDates: new Set(starts).size > 1,
+        note: 'The chart is rebased to 100 over the common overlapping period. Absolute values are only directly comparable when base currencies match.',
+      },
+    };
+  }
 }
 
 function round2(val: number): number {
   return Math.round(val * 100) / 100;
+}
+
+function nullableNumber(value: unknown): number | null {
+  if (value == null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isoDate(value: string | Date): string {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
 }

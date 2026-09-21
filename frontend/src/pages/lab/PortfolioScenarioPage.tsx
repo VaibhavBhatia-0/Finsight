@@ -52,7 +52,7 @@ export default function PortfolioScenarioPage() {
   return <main className="scenario-page">
     <header className="page-heading"><div><p className="page-eyebrow">FinSight Lab · Scenario engine</p><h1>Portfolio scenario</h1><p className="page-subtitle">Explore a weighted multi-asset allocation with attribution that reconciles to total performance.</p></div></header>
     <form onSubmit={handleSubmit(submit)} className="panel scenario-form space-y-4">
-      <div className="panel-header"><div><h2 className="panel-title">Allocation and assumptions</h2><p className="panel-subtitle">Weights must form one complete portfolio</p></div><span className="freshness-badge">Synthetic history</span></div>
+      <div className="panel-header"><div><h2 className="panel-title">Allocation and assumptions</h2><p className="panel-subtitle">Weights must form one complete portfolio</p></div><span className="freshness-badge">Provider history</span></div>
       <div className="grid grid-cols-[1fr_8rem] gap-3">
         <Controller name="firstSymbol" control={control} rules={{ required: true }} render={({ field }) => <StockSearchInput label="First asset" value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} />} />
         <label className="block text-sm font-medium">Weight %<input type="number" min="0.01" max="99.99" step="0.01" {...register('firstWeight', { required: true, valueAsNumber: true })} className="mt-1 w-full rounded border px-3 py-2" /></label>

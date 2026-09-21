@@ -1,34 +1,7 @@
 import { PriceBar } from '../../repositories/priceHistory.repository';
+import type { StockFundamentalData, StockQuote } from './types';
 
-export interface StockQuote {
-  symbol: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  high: number;
-  low: number;
-  open: number;
-  previousClose: number;
-  volume: number;
-  freshness: 'Live' | 'Delayed' | 'End-of-day' | 'Synthetic';
-  timestamp: string;
-  source: string;
-}
-
-export interface StockFundamentalData {
-  marketCap: number;
-  peRatio: number;
-  eps: number;
-  dividendYield: number;
-  revenue: number;
-  profit: number;
-  totalDebt: number;
-  fiftyTwoWeekHigh: number;
-  fiftyTwoWeekLow: number;
-  rsi14: number;
-  sma50: number;
-  sma200: number;
-}
+export type { StockFundamentalData, StockQuote } from './types';
 
 export class MockMarketDataProvider {
   private static baselineProfiles: Record<string, { basePrice: number; beta: number; currency: string; name: string; sector: string }> = {
@@ -61,6 +34,10 @@ export class MockMarketDataProvider {
 
     return {
       symbol: sym,
+      providerSymbol: sym,
+      provider: 'FINSIGHT_TEST_FIXTURE',
+      exchange: profile.currency === 'INR' ? 'NSE' : 'NASDAQ',
+      currency: profile.currency,
       price: currentPrice,
       change,
       changePercent,
@@ -69,9 +46,18 @@ export class MockMarketDataProvider {
       low: round2(Math.min(currentPrice, prevClose) * 0.992),
       previousClose: prevClose,
       volume: 1500000 + (hash % 1000000),
-      freshness: 'Synthetic',
+      fiftyTwoWeekHigh: round2(currentPrice * 1.25),
+      fiftyTwoWeekLow: round2(currentPrice * 0.72),
+      freshness: 'SYNTHETIC',
+      freshnessLabel: 'SYNTHETIC',
+      marketStatus: 'UNKNOWN',
+      marketTimestamp: new Date().toISOString(),
       timestamp: new Date().toISOString(),
-      source: 'FINSIGHT_DEVELOPMENT_FIXTURE',
+      fetchedAt: new Date().toISOString(),
+      freshnessSeconds: 0,
+      isDelayed: false,
+      isStale: false,
+      source: 'FINSIGHT_TEST_FIXTURE',
     };
   }
 
@@ -80,15 +66,16 @@ export class MockMarketDataProvider {
     const profile = this.baselineProfiles[sym] || { basePrice: 100.0, beta: 1.0, currency: 'USD', name: sym, sector: 'Equities' };
 
     const bars: PriceBar[] = [];
-    const today = new Date();
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     let price = profile.basePrice * 0.45; // 5 years ago baseline price
 
     for (let i = days; i >= 0; i--) {
       const d = new Date(today);
-      d.setDate(d.getDate() - i);
+      d.setUTCDate(d.getUTCDate() - i);
 
       // Skip weekends (Saturday=6, Sunday=0)
-      const dayOfWeek = d.getDay();
+      const dayOfWeek = d.getUTCDay();
       if (dayOfWeek === 0 || dayOfWeek === 6) continue;
 
       const dateStr = d.toISOString().slice(0, 10);
@@ -142,6 +129,8 @@ export class MockMarketDataProvider {
       rsi14: 45.0 + (hash % 30),
       sma50: round2(quote.price * 0.98),
       sma200: round2(quote.price * 0.92),
+      source: 'FINSIGHT_TEST_FIXTURE',
+      retrievedAt: new Date().toISOString(),
     };
   }
 

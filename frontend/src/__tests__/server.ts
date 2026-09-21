@@ -14,8 +14,8 @@ export const handlers = [
     { id: '2', category: 'Travel', amount: '1500', start_date: '2024-01-01', end_date: '2024-12-31' },
   ]))),
   http.get('http://localhost/api/v1/finance/goals', () => HttpResponse.json(envelope([
-    { id: '1', name: 'Emergency Fund', target_amount: '5000', current_amount: '1000', target_date: '2025-01-01' },
-    { id: '2', name: 'Car', target_amount: '10000', current_amount: '2500', target_date: '2026-01-01' },
+    { id: '1', name: 'Emergency Fund', target_amount: '5000', current_amount: '1000', target_date: '2025-01-01', base_currency: 'INR', portfolio_id: null, status: 'ACTIVE' },
+    { id: '2', name: 'Car', target_amount: '10000', current_amount: '2500', target_date: '2026-01-01', base_currency: 'INR', portfolio_id: '3', status: 'ACTIVE' },
   ]))),
 ];
 

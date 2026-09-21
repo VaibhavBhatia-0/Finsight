@@ -127,7 +127,7 @@ describe('Canonical API contract integration', () => {
   it('runs and retrieves a backtest through the canonical backtests route', async () => {
     const portfolioResponse = await fetch(`${baseUrl}/api/v1/portfolios`, {
       method: 'POST',
-      ...authenticated({ name: 'Contract Portfolio', baseCurrency: 'INR' }),
+      ...authenticated({ name: 'Contract Portfolio', baseCurrency: 'INR', initialDeposit: { amount: 100000, date: '2023-01-01' } }),
     });
     const portfolioId = (await portfolioResponse.json()).data.portfolio.id;
     await fetch(`${baseUrl}/api/v1/portfolios/${portfolioId}/transactions`, {
@@ -137,13 +137,18 @@ describe('Canonical API contract integration', () => {
 
     const run = await fetch(`${baseUrl}/api/v1/backtests`, {
       method: 'POST',
-      ...authenticated({ portfolioId, startDate: '2023-06-01', endDate: '2024-01-02', initialAmount: 10000, strategyType: 'BUY_AND_HOLD' }),
+      ...authenticated({ portfolioId, startDate: '2023-06-01', endDate: '2024-01-02', initialAmount: 10000, strategyType: 'BUY_AND_HOLD', benchmarkSymbol: '^NSEI', feeRate: 0.001, fixedFee: 10 }),
     });
     const result = await run.json();
     expect(run.status).toBe(201);
     expect(result.success).toBe(true);
     expect(result.data).toMatchObject({ status: 'completed', details: { strategyType: 'BUY_AND_HOLD' } });
     expect(result.data.summary.totalInvested).toBe(10000);
+    expect(result.data.summary.feesPaid).toBeGreaterThan(0);
+    expect(result.data.summary.benchmarkReturn).not.toBeNull();
+    expect(result.data.summary.benchmarkCagr).not.toBeNull();
+    expect(result.data.details.benchmarkSymbol).toBe('^NSEI');
+    expect(result.data.details.timeSeries[0]).toHaveProperty('benchmark_value');
 
     const get = await fetch(`${baseUrl}/api/v1/backtests/${result.data.id}`, authenticated());
     const retrieved = await get.json();
@@ -172,6 +177,28 @@ describe('Canonical API contract integration', () => {
     const secondRead = await fetch(`${baseUrl}/api/v1/finance/transactions?category=Consulting%20retainer`, authenticated());
     expect((await firstRead.json()).data).toHaveLength(3);
     expect((await secondRead.json()).data).toHaveLength(3);
+  });
+
+  it('calculates contribution requirements and historical recurring plans through canonical engines', async () => {
+    const requirement = await fetch(`${baseUrl}/api/v1/planning/required-contribution`, {
+      method: 'POST',
+      ...authenticated({ targetAmount: 1200, currentAmount: 0, asOfDate: '2026-01-01', targetDate: '2027-01-01', frequency: 'MONTHLY' }),
+    });
+    const requirementPayload = await requirement.json();
+    expect(requirement.status).toBe(200);
+    expect(requirementPayload.data).toMatchObject({ contributionCount: 12, noGrowth: { requiredContribution: 100, totalContributions: 1200 } });
+    expect(requirementPayload.data.growthAssumption).toBeNull();
+
+    const recurring = await fetch(`${baseUrl}/api/v1/planning/recurring`, {
+      method: 'POST',
+      ...authenticated({ symbol: 'RELIANCE', startDate: '2024-01-01', endDate: '2024-03-01', initialAmount: 1000, baseCurrency: 'INR', contributionFrequency: 'MONTHLY', contributionGrowthRate: 0, feeRate: 0 }),
+    });
+    const recurringPayload = await recurring.json();
+    expect(recurring.status).toBe(200);
+    expect(recurringPayload.data.hypothetical).toBe(true);
+    expect(recurringPayload.data.result.mode).toBe('RECURRING_INVESTMENT');
+    expect(recurringPayload.data.result.contributions).toHaveLength(3);
+    expect(recurringPayload.data.disclaimer).toContain('future');
   });
 
   it('exports authenticated CSV and PDF reports with methodology and disclaimers', async () => {

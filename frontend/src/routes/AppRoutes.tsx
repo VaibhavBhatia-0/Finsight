@@ -1,35 +1,38 @@
 // src/routes/AppRoutes.tsx
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import DashboardPage from '../pages/DashboardPage';
-import LoginPage from '../pages/auth/LoginPage';
-import RegisterPage from '../pages/auth/RegisterPage';
-import MarketsPage from '../pages/MarketsPage';
-import StockDetailPage from '../pages/StockDetailPage';
-import ScreenerPage from '../pages/ScreenerPage';
-import WatchlistPage from '../pages/WatchlistPage';
-import PortfolioListPage from '../pages/PortfolioListPage';
-import PortfolioDetailPage from '../pages/PortfolioDetailPage';
-import LabIndexPage from '../pages/lab/LabIndexPage';
-import SingleInvestmentPage from '../pages/lab/SingleInvestmentPage';
-import RecurringInvestmentPage from '../pages/lab/RecurringInvestmentPage';
-import PortfolioScenarioPage from '../pages/lab/PortfolioScenarioPage';
-import CompareScenariosPage from '../pages/lab/CompareScenariosPage';
-import LabBacktestPage from '../pages/lab/LabBacktestPage';
-import FinanceExpensesPage from '../pages/finance/ExpensesPage';
-import FinanceBudgetsPage from '../pages/finance/BudgetsPage';
-import FinanceSavingsPage from '../pages/finance/SavingsPage';
-import FinanceGoalsPage from '../pages/finance/GoalsPage';
-import InsightsPage from '../pages/InsightsPage';
-import BacktestingPage from '../pages/BacktestingPage';
-import SettingsPage from '../pages/SettingsPage';
-import ReportsPage from '../pages/ReportsPage';
-import FinanceTransactionsPage from '../pages/finance/TransactionsPage';
-import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
-import ResetPasswordPage from '../pages/auth/ResetPasswordPage';
-import VerifyEmailPage from '../pages/auth/VerifyEmailPage';
 import { useAuth } from '../hooks/useAuth';
 import AppLayout from '../layout/AppLayout';
+
+const DashboardPage = lazy(() => import('../pages/DashboardPage'));
+const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
+const RegisterPage = lazy(() => import('../pages/auth/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPasswordPage'));
+const VerifyEmailPage = lazy(() => import('../pages/auth/VerifyEmailPage'));
+const MarketsPage = lazy(() => import('../pages/MarketsPage'));
+const StockDetailPage = lazy(() => import('../pages/StockDetailPage'));
+const ScreenerPage = lazy(() => import('../pages/ScreenerPage'));
+const WatchlistPage = lazy(() => import('../pages/WatchlistPage'));
+const PortfolioListPage = lazy(() => import('../pages/PortfolioListPage'));
+const PortfolioDetailPage = lazy(() => import('../pages/PortfolioDetailPage'));
+const PortfolioComparePage = lazy(() => import('../pages/PortfolioComparePage'));
+const PlanningPage = lazy(() => import('../pages/PlanningPage'));
+const LabIndexPage = lazy(() => import('../pages/lab/LabIndexPage'));
+const SingleInvestmentPage = lazy(() => import('../pages/lab/SingleInvestmentPage'));
+const RecurringInvestmentPage = lazy(() => import('../pages/lab/RecurringInvestmentPage'));
+const PortfolioScenarioPage = lazy(() => import('../pages/lab/PortfolioScenarioPage'));
+const CompareScenariosPage = lazy(() => import('../pages/lab/CompareScenariosPage'));
+const LabBacktestPage = lazy(() => import('../pages/lab/LabBacktestPage'));
+const FinanceExpensesPage = lazy(() => import('../pages/finance/ExpensesPage'));
+const FinanceTransactionsPage = lazy(() => import('../pages/finance/TransactionsPage'));
+const FinanceBudgetsPage = lazy(() => import('../pages/finance/BudgetsPage'));
+const FinanceSavingsPage = lazy(() => import('../pages/finance/SavingsPage'));
+const FinanceGoalsPage = lazy(() => import('../pages/finance/GoalsPage'));
+const InsightsPage = lazy(() => import('../pages/InsightsPage'));
+const BacktestingPage = lazy(() => import('../pages/BacktestingPage'));
+const SettingsPage = lazy(() => import('../pages/SettingsPage'));
+const ReportsPage = lazy(() => import('../pages/ReportsPage'));
 
 // Guard component for protected routes
 const RequireAuth: React.FC = () => {
@@ -40,7 +43,7 @@ const RequireAuth: React.FC = () => {
 
 const AppRoutes: React.FC = () => {
   return (
-    <Routes>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center" role="status">Loading FinSight…</div>}><Routes>
       {/* Public routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -56,7 +59,9 @@ const AppRoutes: React.FC = () => {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/portfolios" element={<PortfolioListPage />} />
+          <Route path="/portfolios/compare" element={<PortfolioComparePage />} />
           <Route path="/portfolios/:id" element={<PortfolioDetailPage />} />
+          <Route path="/planning" element={<PlanningPage />} />
           <Route path="/lab" element={<LabIndexPage />} />
           <Route path="/lab/single-investment" element={<SingleInvestmentPage />} />
           <Route path="/lab/recurring-investment" element={<RecurringInvestmentPage />} />
@@ -76,7 +81,7 @@ const AppRoutes: React.FC = () => {
       </Route>
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+    </Routes></Suspense>
   );
 };
 

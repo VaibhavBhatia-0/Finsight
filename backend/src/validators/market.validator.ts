@@ -37,3 +37,14 @@ export const screenerQuerySchema = z.object({
 });
 
 export type ScreenerFilters = z.infer<typeof screenerQuerySchema>;
+
+export const stockListQuerySchema = z.object({
+  q: z.string().trim().max(100).optional(),
+  exchange: z.string().trim().max(20).optional(),
+  country: z.string().trim().length(2).optional(),
+  sector: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  sortBy: z.enum(['symbol', 'company']).default('symbol'),
+  sortOrder: z.enum(['asc', 'desc']).default('asc'),
+});

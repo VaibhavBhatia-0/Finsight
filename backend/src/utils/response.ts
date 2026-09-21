@@ -1,6 +1,8 @@
 import { Response } from 'express';
 
-export type DataFreshness = 'Live' | 'Delayed' | 'End-of-day' | 'Historical' | 'Static' | 'Synthetic';
+export type DataFreshness =
+  | 'LIVE' | 'DELAYED' | 'LAST CLOSE' | 'STALE' | 'UNAVAILABLE' | 'SYNTHETIC'
+  | 'Live' | 'Delayed' | 'End-of-day' | 'Historical' | 'Static' | 'Synthetic';
 
 export interface ApiSuccessResponse<T = any> {
   success: true;

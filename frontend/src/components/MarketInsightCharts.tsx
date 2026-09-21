@@ -1,14 +1,14 @@
 import type { Insight, MarketIndex, MarketStock } from '../api/contracts';
 
-const palette = ['#9b8cff', '#d1a65a', '#7783a5', '#c9c3ff'];
+const palette = ['#d1a65a', '#5ca98c', '#9a8a6b', '#b98a3f'];
 
 export function IndexPerformanceChart({ indices }: { indices: MarketIndex[] }) {
   return <DivergingBars title="Index session change" rows={indices.map(index => ({ label: index.name, value: index.changePercent }))} />;
 }
 
 export function MarketMoversChart({ stocks }: { stocks: MarketStock[] }) {
-  const movers = stocks.slice().sort((a, b) => Math.abs(b.quote.changePercent) - Math.abs(a.quote.changePercent)).slice(0, 6);
-  return <DivergingBars title="Largest catalogue moves" rows={movers.map(stock => ({ label: stock.symbol, value: stock.quote.changePercent }))} compact />;
+  const movers = stocks.filter(stock => stock.quote).slice().sort((a, b) => Math.abs(b.quote!.changePercent) - Math.abs(a.quote!.changePercent)).slice(0, 6);
+  return <DivergingBars title="Largest catalogue moves" rows={movers.map(stock => ({ label: stock.symbol, value: stock.quote!.changePercent }))} compact />;
 }
 
 export function InsightDistributionChart({ insights }: { insights: Insight[] }) {

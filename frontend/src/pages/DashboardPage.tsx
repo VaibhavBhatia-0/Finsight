@@ -24,8 +24,6 @@ export default function DashboardPage() {
   const portfolioTransactions = usePortfolioTransactions(focusPortfolio?.portfolio.id);
 
   if ([portfolios, watchlists, markets, finance, insights].some(query => query.isPending) || (focusPortfolio && portfolioTransactions.isPending)) return <Spinner />;
-  const error = portfolios.error || watchlists.error || markets.error || finance.error || insights.error || portfolioTransactions.error;
-  if (error) return <p className="error-banner" role="alert">{error.message}</p>;
 
   const currencies = new Set(portfolios.data?.map(item => item.portfolio.baseCurrency));
   const combinedValue = currencies.size <= 1 ? portfolios.data?.reduce((sum, item) => sum + item.summary.totalValue, 0) ?? 0 : null;
@@ -62,7 +60,7 @@ export default function DashboardPage() {
 
         <section className="panel dashboard-ledger">
           <div className="panel-header"><div><h2 className="panel-title">Recent portfolio activity</h2><p className="panel-subtitle">Latest entries from the authoritative ledger</p></div>{focusPortfolio && <Link to={`/portfolios/${focusPortfolio.portfolio.id}`}>Open portfolio <ArrowUpRight size={13} /></Link>}</div>
-          {portfolioTransactions.data?.length ? <div className="overflow-x-auto"><table><thead><tr><th className="text-left">Asset</th><th className="text-left">Type</th><th className="text-right">Units</th><th className="text-right">Total value</th><th className="text-right">Date</th></tr></thead><tbody>{portfolioTransactions.data.slice(0, 5).map(row => <tr key={row.id}><td><strong>{row.symbol ?? 'Cash'}</strong>{row.company_name && <span className="ml-2 text-xs text-gray-500">{row.company_name}</span>}</td><td><span className={`ledger-pill ${row.transaction_type.toLowerCase()}`}>{row.transaction_type}</span></td><td className="text-right font-mono">{row.quantity == null ? '—' : Number(row.quantity).toLocaleString()}</td><td className="text-right font-mono">{row.currency} {Number(row.amount).toLocaleString()}</td><td className="text-right">{row.transaction_date.slice(0, 10)}</td></tr>)}</tbody></table></div> : <Empty text="Portfolio activity appears here after your first ledger entry." link="/portfolios" label="Open portfolios" />}
+          {portfolioTransactions.error ? <p className="error-banner" role="alert">Portfolio activity is temporarily unavailable.</p> : portfolioTransactions.data?.length ? <div className="overflow-x-auto"><table><thead><tr><th className="text-left">Asset</th><th className="text-left">Type</th><th className="text-right">Units</th><th className="text-right">Total value</th><th className="text-right">Date</th></tr></thead><tbody>{portfolioTransactions.data.slice(0, 5).map(row => <tr key={row.id}><td><strong>{row.symbol ?? 'Cash'}</strong>{row.company_name && <span className="ml-2 text-xs text-gray-500">{row.company_name}</span>}</td><td><span className={`ledger-pill ${row.transaction_type.toLowerCase()}`}>{row.transaction_type}</span></td><td className="text-right font-mono">{row.quantity == null ? '—' : Number(row.quantity).toLocaleString()}</td><td className="text-right font-mono">{row.currency} {Number(row.amount).toLocaleString()}</td><td className="text-right">{row.transaction_date.slice(0, 10)}</td></tr>)}</tbody></table></div> : <Empty text="Portfolio activity appears here after your first ledger entry." link="/portfolios" label="Open portfolios" />}
         </section>
 
         <section className="finance-snapshot" aria-label="Personal finance snapshot">
@@ -74,23 +72,23 @@ export default function DashboardPage() {
       </div>
     ),
     indices: (
-      <Panel title="Market pulse" subtitle="Development market feed" action={<Link to="/markets">View markets <ArrowUpRight size={13} /></Link>}>
-        <div className="data-list">
+      <Panel title="Market pulse" subtitle="Timestamped provider feed" action={<Link to="/markets">View markets <ArrowUpRight size={13} /></Link>}>
+        {markets.error ? <p className="error-banner" role="alert">Market data is temporarily unavailable; the rest of your dashboard remains usable.</p> : <div className="data-list">
           {markets.data?.indices.filter(index => preferences.selectedMarketIndices.includes(index.code)).map(index => (
             <div className="data-row" key={index.code}>
               <div><strong>{index.name}</strong><p>{index.country} · {index.currency}</p></div>
               <div className="text-right"><strong className="font-mono">{index.price.toLocaleString()}</strong><p className={index.changePercent >= 0 ? 'movement-up' : 'movement-down'}>{index.changePercent >= 0 ? '+' : ''}{index.changePercent.toFixed(2)}%</p></div>
             </div>
           ))}
-        </div>
+        </div>}
       </Panel>
     ),
     watchlist: (
       <Panel title="Watchlist" subtitle={`${allWatchItems.length} tracked assets`} action={<Link to="/watchlist">Open list <ArrowUpRight size={13} /></Link>}>
-        {allWatchItems.length ? <div className="data-list">{allWatchItems.slice(0, 5).map(item => (
+        {watchlists.error ? <p className="error-banner" role="alert">Watchlist data is temporarily unavailable.</p> : allWatchItems.length ? <div className="data-list">{allWatchItems.slice(0, 5).map(item => (
           <Link to={`/markets/${item.symbol}`} className="data-row" key={`${item.watchlist_id}-${item.stock_id}`}>
             <div className="flex items-center gap-3"><span className="symbol-token">{item.symbol.slice(0, 2)}</span><div><strong>{item.symbol}</strong><p>{item.company_name}</p></div></div>
-            <div className="text-right"><strong className="font-mono">{item.currency} {item.quote.price.toFixed(2)}</strong><p className={item.quote.changePercent >= 0 ? 'movement-up' : 'movement-down'}>{item.quote.changePercent >= 0 ? '+' : ''}{item.quote.changePercent.toFixed(2)}%</p></div>
+            <div className="text-right">{item.quote ? <><strong className="font-mono">{item.currency} {item.quote.price.toFixed(2)}</strong><p className={item.quote.changePercent >= 0 ? 'movement-up' : 'movement-down'}>{item.quote.changePercent >= 0 ? '+' : ''}{item.quote.changePercent.toFixed(2)}%</p></> : <><strong>N/A</strong><p>Unavailable</p></>}</div>
           </Link>
         ))}</div> : <Empty text="Your watchlist is ready for its first asset." link="/markets" label="Browse markets" />}
       </Panel>
@@ -108,7 +106,7 @@ export default function DashboardPage() {
     ),
     insights: (
       <Panel title="Ledger insights" subtitle="Deterministic observations, not advice" action={<Link to="/insights">View all <ArrowUpRight size={13} /></Link>}>
-        {insights.data?.insights.length ? <div className="data-list">{insights.data.insights.slice(0, 3).map(item => (
+        {insights.error ? <p className="error-banner" role="alert">Insights are temporarily unavailable.</p> : insights.data?.insights.length ? <div className="data-list">{insights.data.insights.slice(0, 3).map(item => (
           <div className="data-row" key={item.id}><div className="flex gap-3"><Sparkles size={16} className="mt-1 text-gold-400" /><div><strong>{item.title}</strong><p>{item.message}</p></div></div>{item.metric && <span className="font-mono text-xs text-gold-400">{item.metric.value.toFixed(2)} {item.metric.unit}</span>}</div>
         ))}</div> : <Empty text="Add finance or portfolio data to generate observations." />}
       </Panel>
@@ -123,6 +121,8 @@ export default function DashboardPage() {
       </header>
 
       {user && !user.emailVerified && <div className="notice mb-5 p-3 text-sm">Your email is not verified. <Link className="text-gold-300 underline" to="/verify-email">Request a verification link.</Link></div>}
+
+      {(portfolios.error || finance.error) && <div className="error-banner mb-5" role="alert">Some account totals are temporarily unavailable. Navigation and unaffected dashboard sections remain available.</div>}
 
       <div className="content-stack">
         {preferences.order.filter(id => preferences.visible[id]).map(id => (

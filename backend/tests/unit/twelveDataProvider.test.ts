@@ -18,7 +18,7 @@ describe('Twelve Data market-data adapter', () => {
 
     const quote = await TwelveDataMarketDataProvider.getQuote('AAPL', 'NASDAQ');
 
-    expect(quote).toMatchObject({ symbol: 'AAPL', price: 201.2, previousClose: 199, change: 2.2, changePercent: 1.1055, volume: 1200500, freshness: 'Delayed', source: 'TWELVE_DATA' });
+    expect(quote).toMatchObject({ symbol: 'AAPL', price: 201.2, previousClose: 199, change: 2.2, changePercent: 1.1055, volume: 1200500, freshness: 'DELAYED', source: 'TWELVE_DATA' });
     expect(fetch).toHaveBeenCalledOnce();
     const requested = new URL(String(vi.mocked(fetch).mock.calls[0][0]));
     expect(requested.searchParams.get('symbol')).toBe('AAPL');

@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { createApp } from '../../src/app';
 import { runMigrations } from '../../src/database/migrate';
 import { runSeeds } from '../../src/database/seed';
@@ -6,6 +8,7 @@ import http from 'http';
 import { AuthActionTokenRepository } from '../../src/repositories/authActionToken.repository';
 import { UserRepository } from '../../src/repositories/user.repository';
 import { db } from '../../src/database/db';
+import { EmailService } from '../../src/services/email.service';
 
 describe('Auth API Integration Tests (/api/v1/auth)', () => {
   let server: http.Server;
@@ -173,5 +176,62 @@ describe('Auth API Integration Tests (/api/v1/auth)', () => {
     const response = await fetch(`${baseUrl}/api/v1/auth/google`);
     expect(response.status).toBe(503);
     expect((await response.json()).error.code).toBe('OAUTH_NOT_CONFIGURED');
+  });
+
+  it('11. rejects registration passwords shorter than eight characters', async () => {
+    const response = await fetch(`${baseUrl}/api/v1/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: `weak-${Date.now()}@example.com`, password: 'short' }) });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('12. accepts verification and forgot-password requests without disclosing account existence', async () => {
+    vi.spyOn(EmailService, 'isConfigured').mockReturnValue(true);
+    vi.spyOn(EmailService, 'sendAction').mockResolvedValue();
+    const verification = await fetch(`${baseUrl}/api/v1/auth/verification/request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: testUser.email }) });
+    const missingReset = await fetch(`${baseUrl}/api/v1/auth/password-reset/request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: `missing-${Date.now()}@example.com` }) });
+    expect(verification.status).toBe(202);
+    expect(missingReset.status).toBe(202);
+    expect(await verification.json()).toMatchObject({ data: { accepted: true } });
+    expect(await missingReset.json()).toMatchObject({ data: { accepted: true } });
+    vi.restoreAllMocks();
+  });
+
+  it('13. rejects expired and reused password-reset tokens', async () => {
+    const user = await UserRepository.findByEmail(testUser.email);
+    const expired = await AuthActionTokenRepository.create(user!.id, 'PASSWORD_RESET', 30);
+    const expiredHash = crypto.createHash('sha256').update(expired).digest('hex');
+    await db.query(`UPDATE auth_action_tokens SET expires_at = CURRENT_TIMESTAMP - INTERVAL '1 minute' WHERE token_hash = $1;`, [expiredHash]);
+    const expiredResponse = await fetch(`${baseUrl}/api/v1/auth/password-reset/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: expired, password: 'AnotherSecurePassword789!' }) });
+    expect(expiredResponse.status).toBe(400);
+    expect((await expiredResponse.json()).error.code).toBe('INVALID_RESET_TOKEN');
+
+    const oneUse = await AuthActionTokenRepository.create(user!.id, 'PASSWORD_RESET', 30);
+    const first = await fetch(`${baseUrl}/api/v1/auth/password-reset/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: oneUse, password: 'FinalSecurePassword789!' }) });
+    const replay = await fetch(`${baseUrl}/api/v1/auth/password-reset/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: oneUse, password: 'ReplaySecurePassword789!' }) });
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(400);
+  });
+
+  it('14. rejects invalid and expired application JWTs', async () => {
+    const invalid = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { Authorization: 'Bearer not-a-jwt' } });
+    expect(invalid.status).toBe(401);
+    const user = await UserRepository.findByEmail(testUser.email);
+    const expired = jwt.sign({ userId: user!.id, email: user!.email, authVersion: user!.auth_version }, process.env.JWT_SECRET!, {
+      algorithm: 'HS256', issuer: process.env.JWT_ISSUER || 'finsight-api', audience: process.env.JWT_AUDIENCE || 'finsight-web', expiresIn: -1,
+    });
+    const expiredResponse = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${expired}` } });
+    expect(expiredResponse.status).toBe(401);
+    expect((await expiredResponse.json()).error.code).toBe('INVALID_TOKEN');
+  });
+
+  it('15. revokes the current JWT generation on logout', async () => {
+    const email = `logout-${Date.now()}@example.com`;
+    const registration = await fetch(`${baseUrl}/api/v1/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: 'SecurePassword123!' }) });
+    const token = (await registration.json()).data.token;
+    const logout = await fetch(`${baseUrl}/api/v1/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    expect(logout.status).toBe(200);
+    const me = await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+    expect(me.status).toBe(401);
+    expect((await me.json()).error.code).toBe('INVALID_TOKEN');
   });
 });

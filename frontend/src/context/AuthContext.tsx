@@ -11,7 +11,7 @@ type AuthContextType = {
   login: (email: string, password: string) => Promise<void>;
   register: (input: { email: string; password: string; name?: string; baseCurrency?: string }) => Promise<void>;
   completeOAuth: (token: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updatePreferences: (updates: Partial<Pick<UserPreferences, 'theme' | 'default_currency' | 'default_benchmark_id' | 'dashboard_layout' | 'selected_market_indices' | 'watchlist_preferences' | 'tax_residency' | 'tax_status'>>) => Promise<UserPreferences>;
   loading: boolean;
 };
@@ -86,12 +86,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const logout = () => {
-    sessionStorage.removeItem('jwt');
-    localStorage.removeItem('jwt');
-    setUser(null);
-    setPreferences(null);
-    navigate('/login');
+  const logout = async () => {
+    try {
+      await api.post(endpoints.auth.logout);
+    } finally {
+      sessionStorage.removeItem('jwt');
+      localStorage.removeItem('jwt');
+      setUser(null);
+      setPreferences(null);
+      navigate('/login');
+    }
   };
 
   const updatePreferences = async (updates: Partial<Pick<UserPreferences, 'theme' | 'default_currency' | 'default_benchmark_id' | 'dashboard_layout' | 'selected_market_indices' | 'watchlist_preferences' | 'tax_residency' | 'tax_status'>>) => {

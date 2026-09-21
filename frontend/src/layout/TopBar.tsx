@@ -38,7 +38,8 @@ export default function TopBar({ onMenu }: { onMenu: () => void }) {
   const markets = useQuery({
     queryKey: ['markets-overview'],
     queryFn: async () => (await api.get<MarketOverview>(endpoints.markets.overview)).data,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
   const context = useMemo(() => routeLabels.find(([pattern]) => pattern.test(location.pathname)) ?? ['' as never, 'FinSight', 'Workspace'], [location.pathname]);
   const initials = (user?.name ?? 'Guest').split(/\s+/).slice(0, 2).map(value => value[0]).join('').toUpperCase();
@@ -51,8 +52,8 @@ export default function TopBar({ onMenu }: { onMenu: () => void }) {
 
   return (
     <header className="topbar-shell" aria-label="Application header">
-      <div className="market-tape" aria-label="Synthetic market overview">
-        <span className="tape-status"><span className="status-dot" />Market overview · synthetic</span>
+      <div className="market-tape" aria-label="Market overview">
+        <span className="tape-status"><span className="status-dot" />Market overview · provider feed</span>
         {markets.data?.indices.slice(0, 6).map(index => (
           <span className="tape-item" key={index.code}>
             <span className="tape-symbol">{index.name}</span>

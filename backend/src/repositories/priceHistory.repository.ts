@@ -45,18 +45,20 @@ export class PriceHistoryRepository {
     return res.rows;
   }
 
-  static async savePriceBar(stockId: string | number, bar: PriceBar): Promise<void> {
+  static async savePriceBar(stockId: string | number, bar: PriceBar, source?: string, observedAt?: string): Promise<void> {
     await db.query(`
       INSERT INTO price_history (
-        stock_id, trading_date, open_price, high_price, low_price, close_price, adjusted_close, volume
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        stock_id, trading_date, open_price, high_price, low_price, close_price, adjusted_close, volume, source, observed_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (stock_id, trading_date) DO UPDATE
       SET open_price = EXCLUDED.open_price,
           high_price = EXCLUDED.high_price,
           low_price = EXCLUDED.low_price,
           close_price = EXCLUDED.close_price,
           adjusted_close = EXCLUDED.adjusted_close,
-          volume = EXCLUDED.volume;
+          volume = EXCLUDED.volume,
+          source = EXCLUDED.source,
+          observed_at = EXCLUDED.observed_at;
     `, [
       stockId,
       bar.date,
@@ -66,7 +68,8 @@ export class PriceHistoryRepository {
       bar.close,
       bar.adjusted_close || bar.close,
       bar.volume,
+      source || null,
+      observedAt || null,
     ]);
   }
 }
-

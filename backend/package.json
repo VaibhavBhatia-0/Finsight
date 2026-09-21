@@ -13,6 +13,8 @@
     "test:finance": "vitest run tests/unit/finance.test.ts",
     "migrate": "ts-node src/database/migrate.ts",
     "seed": "ts-node src/database/seed.ts",
+    "universe:sync": "ts-node src/database/syncSecurityUniverse.ts",
+    "market:verify": "ts-node src/database/verifyMarketData.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -41,4 +43,3 @@
     "vitest": "^2.1.1"
   }
 }
-

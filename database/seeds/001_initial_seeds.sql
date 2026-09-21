@@ -29,15 +29,15 @@ INSERT INTO tax_rules (jurisdiction, tax_type, asset_type, effective_from, effec
 ON CONFLICT DO NOTHING;
 
 -- STOCKS (Baseline Indian and US Equities)
-INSERT INTO stocks (symbol, exchange_id, exchange, company_name, currency, sector, industry) VALUES
-('RELIANCE', (SELECT id FROM exchanges WHERE code = 'NSE'), 'NSE', 'Reliance Industries Ltd.', 'INR', 'Energy', 'Oil & Gas Refining'),
-('TCS', (SELECT id FROM exchanges WHERE code = 'NSE'), 'NSE', 'Tata Consultancy Services Ltd.', 'INR', 'Technology', 'IT Services'),
-('HDFCBANK', (SELECT id FROM exchanges WHERE code = 'NSE'), 'NSE', 'HDFC Bank Ltd.', 'INR', 'Financial Services', 'Banking'),
-('INFY', (SELECT id FROM exchanges WHERE code = 'NSE'), 'NSE', 'Infosys Ltd.', 'INR', 'Technology', 'IT Consulting'),
-('NVDA', (SELECT id FROM exchanges WHERE code = 'NASDAQ'), 'NASDAQ', 'NVIDIA Corporation', 'USD', 'Technology', 'Semiconductors'),
-('AAPL', (SELECT id FROM exchanges WHERE code = 'NASDAQ'), 'NASDAQ', 'Apple Inc.', 'USD', 'Technology', 'Consumer Electronics'),
-('MSFT', (SELECT id FROM exchanges WHERE code = 'NASDAQ'), 'NASDAQ', 'Microsoft Corporation', 'USD', 'Technology', 'Software'),
-('GOOGL', (SELECT id FROM exchanges WHERE code = 'NASDAQ'), 'NASDAQ', 'Alphabet Inc.', 'USD', 'Technology', 'Internet & Software')
+INSERT INTO stocks (symbol, display_symbol, provider_symbol, exchange_id, exchange, company_name, currency, sector, industry) VALUES
+('RELIANCE', 'RELIANCE', 'RELIANCE.NS', (SELECT id FROM exchanges WHERE code = 'NSE'), 'NSE', 'Reliance Industries Ltd.', 'INR', 'Energy', 'Oil & Gas Refining'),
+('TCS', 'TCS', 'TCS.NS', (SELECT id FROM exchanges WHERE code = 'NSE'), 'NSE', 'Tata Consultancy Services Ltd.', 'INR', 'Technology', 'IT Services'),
+('HDFCBANK', 'HDFCBANK', 'HDFCBANK.NS', (SELECT id FROM exchanges WHERE code = 'NSE'), 'NSE', 'HDFC Bank Ltd.', 'INR', 'Financial Services', 'Banking'),
+('INFY', 'INFY', 'INFY.NS', (SELECT id FROM exchanges WHERE code = 'NSE'), 'NSE', 'Infosys Ltd.', 'INR', 'Technology', 'IT Consulting'),
+('NVDA', 'NVDA', 'NVDA', (SELECT id FROM exchanges WHERE code = 'NASDAQ'), 'NASDAQ', 'NVIDIA Corporation', 'USD', 'Technology', 'Semiconductors'),
+('AAPL', 'AAPL', 'AAPL', (SELECT id FROM exchanges WHERE code = 'NASDAQ'), 'NASDAQ', 'Apple Inc.', 'USD', 'Technology', 'Consumer Electronics'),
+('MSFT', 'MSFT', 'MSFT', (SELECT id FROM exchanges WHERE code = 'NASDAQ'), 'NASDAQ', 'Microsoft Corporation', 'USD', 'Technology', 'Software'),
+('GOOGL', 'GOOGL', 'GOOGL', (SELECT id FROM exchanges WHERE code = 'NASDAQ'), 'NASDAQ', 'Alphabet Inc.', 'USD', 'Technology', 'Internet & Software')
 ON CONFLICT (symbol, exchange_id) DO NOTHING;
 
 -- INITIAL FX RATES (USD/INR historical sample and current reference)

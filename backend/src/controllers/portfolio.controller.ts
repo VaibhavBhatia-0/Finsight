@@ -22,22 +22,23 @@ export class PortfolioController {
   static async createPortfolio(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;
-      const { name, baseCurrency, benchmarkId } = req.body;
+      const { name, baseCurrency, benchmarkId, initialDeposit } = req.body;
       const portfolio = await PortfolioRepository.create(userId, {
         name: name || 'Primary Portfolio',
         baseCurrency: baseCurrency || 'INR',
         benchmarkId,
       });
 
-      // Automatically add initial virtual deposit of 100,000 to enable starting
-      await PortfolioRepository.addTransaction({
-        portfolioId: portfolio.id,
-        transactionType: 'DEPOSIT',
-        transactionDate: new Date().toISOString().slice(0, 10),
-        amount: 100000,
-        currency: portfolio.base_currency,
-        notes: 'Initial hypothetical deposit',
-      });
+      if (initialDeposit?.amount > 0) {
+        await PortfolioService.addTransaction(userId, portfolio.id, {
+          transactionType: 'DEPOSIT',
+          transactionDate: initialDeposit.date,
+          amount: initialDeposit.amount,
+          currency: portfolio.base_currency,
+          feeAmount: 0,
+          notes: 'Opening cash contribution',
+        });
+      }
 
       const valuation = await PortfolioService.getValuation(portfolio.id, userId);
       sendSuccess(res, valuation, 201, 'Live');
@@ -96,5 +97,30 @@ export class PortfolioController {
       next(error);
     }
   }
-}
 
+  static async updatePortfolio(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      sendSuccess(res, await PortfolioService.updatePortfolio(req.user!.id, req.params.id, req.body), 200, 'Live');
+    } catch (error) { next(error); }
+  }
+
+  static async getIntelligence(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      sendSuccess(res, await PortfolioService.getIntelligence(req.params.id, req.user!.id), 200, 'Historical', {
+        source: process.env.NODE_ENV === 'test' ? 'FINSIGHT_TEST_FIXTURE' : 'YAHOO_FINANCE_CHART',
+        degraded: false,
+      });
+    } catch (error) { next(error); }
+  }
+
+  static async compare(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      sendSuccess(res, await PortfolioService.comparePortfolios(req.user!.id, req.body.portfolioIds), 200, 'Historical');
+    } catch (error) { next(error); }
+  }
+
+  static async benchmarks(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try { sendSuccess(res, await PortfolioRepository.listBenchmarks(), 200, 'Historical'); }
+    catch (error) { next(error); }
+  }
+}

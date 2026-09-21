@@ -1,225 +1,196 @@
-import { MockMarketDataProvider, StockQuote, StockFundamentalData } from './marketData/mockProvider';
-import { StockRepository, StockRow } from '../repositories/stock.repository';
-import { PriceHistoryRepository, PriceBar } from '../repositories/priceHistory.repository';
 import { AppError } from '../middleware/errorHandler';
+import { PriceHistoryRepository, type PriceBar } from '../repositories/priceHistory.repository';
+import { StockRepository } from '../repositories/stock.repository';
 import type { ScreenerFilters } from '../validators/market.validator';
+import { MockMarketDataProvider } from './marketData/mockProvider';
 import { TwelveDataMarketDataProvider } from './marketData/twelveDataProvider';
+import type { MarketHistory, StockFundamentalData, StockQuote } from './marketData/types';
+import { YahooFinanceMarketDataProvider } from './marketData/yahooProvider';
+
+const INDEX_UNIVERSE = [
+  { code: 'NIFTY_50', providerSymbol: '^NSEI', name: 'NIFTY 50', country: 'IN', currency: 'INR', exchange: 'NSE' },
+  { code: 'SENSEX', providerSymbol: '^BSESN', name: 'BSE SENSEX', country: 'IN', currency: 'INR', exchange: 'BSE' },
+  { code: 'SP500', providerSymbol: '^GSPC', name: 'S&P 500', country: 'US', currency: 'USD', exchange: 'NYSE' },
+  { code: 'NASDAQ_COMP', providerSymbol: '^IXIC', name: 'NASDAQ Composite', country: 'US', currency: 'USD', exchange: 'NASDAQ' },
+] as const;
 
 export class MarketDataService {
-  private static assertMockIsAllowed(): void {
-    if (process.env.NODE_ENV === 'production') {
-      throw new AppError('No licensed production market-data provider is configured', 503, 'MARKET_DATA_UNAVAILABLE');
-    }
+  private static useTestFixtures(): boolean {
+    return process.env.NODE_ENV === 'test';
   }
-  /**
-   * Retrieves real-time or delayed quote for a symbol.
-   * Checks database cache or delegates to the active provider adapter.
-   */
-  public static async getQuote(symbol: string, exchange?: string): Promise<StockQuote> {
-    if (TwelveDataMarketDataProvider.configured()) {
+
+  static async getQuote(symbol: string, exchange?: string): Promise<StockQuote> {
+    if (this.useTestFixtures()) return MockMarketDataProvider.getQuote(symbol);
+    if (process.env.MARKET_DATA_PROVIDER?.toLowerCase() === 'mock') {
+      throw new AppError('Mock market data is restricted to tests', 503, 'MARKET_DATA_UNAVAILABLE');
+    }
+    if (TwelveDataMarketDataProvider.configured()) return TwelveDataMarketDataProvider.getQuote(symbol, exchange);
+    return YahooFinanceMarketDataProvider.getQuote(symbol, exchange);
+  }
+
+  static async getPriceHistory(stockId: string | number, symbol: string, startDate?: string, endDate?: string, exchange?: string): Promise<PriceBar[]> {
+    if (this.useTestFixtures()) {
+      const stored = await PriceHistoryRepository.getPrices(stockId, startDate, endDate);
+      if (stored.length) return stored;
+      return MockMarketDataProvider.generateHistoricalPrices(symbol, 1825)
+        .filter(bar => (!startDate || bar.date >= startDate) && (!endDate || bar.date <= endDate));
+    }
+    if (startDate && endDate) {
       try {
-        return await TwelveDataMarketDataProvider.getQuote(symbol, exchange);
+        const history = await YahooFinanceMarketDataProvider.getHistoryBetween(symbol, exchange, startDate, endDate);
+        await Promise.all(history.bars.map(bar => PriceHistoryRepository.savePriceBar(stockId, bar, history.provider, history.fetchedAt)));
+        return history.bars;
       } catch (error) {
-        if (process.env.NODE_ENV === 'production') throw error;
+        const cached = await PriceHistoryRepository.getPrices(stockId, startDate, endDate);
+        if (cached.length) return cached;
+        throw error;
       }
     }
-    this.assertMockIsAllowed();
-    return MockMarketDataProvider.getQuote(symbol);
+    const cached = await PriceHistoryRepository.getPrices(stockId, startDate, endDate);
+    if (cached.length) return cached;
+    return (await YahooFinanceMarketDataProvider.getHistory(symbol, exchange, '5y', '1d')).bars;
   }
 
-  /**
-   * Retrieves historical OHLCV price series.
-   * Looks up in PostgreSQL price_history. If empty, populates from provider and caches into PostgreSQL.
-   */
-  public static async getPriceHistory(
-    stockId: string | number,
-    symbol: string,
-    startDate?: string,
-    endDate?: string
-  ): Promise<PriceBar[]> {
-    let prices = await PriceHistoryRepository.getPrices(stockId, startDate, endDate);
-
-    if (prices.length === 0) {
-      this.assertMockIsAllowed();
-      // Development-only synthetic history is never persisted as an observation.
-      const generated = MockMarketDataProvider.generateHistoricalPrices(symbol, 1825); // 5 years
-      prices = generated.filter((bar) => (!startDate || bar.date >= startDate) && (!endDate || bar.date <= endDate));
+  static async getExternalPriceHistory(symbol: string, exchange: string | undefined, startDate: string, endDate: string): Promise<PriceBar[]> {
+    if (this.useTestFixtures()) {
+      return MockMarketDataProvider.generateHistoricalPrices(symbol, 1825)
+        .filter(bar => bar.date >= startDate && bar.date <= endDate);
     }
-
-    return prices;
+    return (await YahooFinanceMarketDataProvider.getHistoryBetween(symbol, exchange, startDate, endDate)).bars;
   }
 
-  /**
-   * Retrieves comprehensive fundamental and technical indicators.
-   */
-  public static async getStockFundamentals(symbol: string): Promise<StockFundamentalData> {
-    this.assertMockIsAllowed();
-    return MockMarketDataProvider.getFundamentals(symbol);
-  }
-
-  /**
-   * Market overview covering Indian and US market indices.
-   */
-  public static async getMarketOverview() {
-    this.assertMockIsAllowed();
-    const indices = [
-      { code: 'NIFTY_50', name: 'NIFTY 50', country: 'IN', currency: 'INR' },
-      { code: 'SENSEX', name: 'BSE SENSEX', country: 'IN', currency: 'INR' },
-      { code: 'SP500', name: 'S&P 500', country: 'US', currency: 'USD' },
-      { code: 'NASDAQ_COMP', name: 'NASDAQ Composite', country: 'US', currency: 'USD' },
-    ];
-
-    const quotes = indices.map((idx) => {
-      const q = MockMarketDataProvider.getQuote(idx.code);
+  static async getChart(symbol: string, exchange: string | undefined, range: string, interval: string): Promise<MarketHistory> {
+    if (this.useTestFixtures()) {
       return {
-        ...idx,
-        price: q.price,
-        change: q.change,
-        changePercent: q.changePercent,
-        freshness: q.freshness,
-        timestamp: q.timestamp,
+        symbol, provider: 'FINSIGHT_TEST_FIXTURE', currency: exchange === 'NSE' ? 'INR' : 'USD', exchange: exchange || 'UNKNOWN',
+        range, interval, fetchedAt: new Date().toISOString(), adjusted: true,
+        bars: MockMarketDataProvider.generateHistoricalPrices(symbol, range === '1d' ? 3 : 365), events: [],
       };
-    });
+    }
+    return YahooFinanceMarketDataProvider.getHistory(symbol, exchange, range, interval);
+  }
 
+  static async getProviderCorporateActions(symbol: string, exchange?: string): Promise<MarketHistory['events']> {
+    if (this.useTestFixtures()) return [];
+    try {
+      return (await YahooFinanceMarketDataProvider.getHistory(symbol, exchange, 'max', '1wk')).events;
+    } catch {
+      return [];
+    }
+  }
+
+  static async getProviderCorporateActionsBetween(symbol: string, exchange: string | undefined, startDate: string, endDate: string): Promise<MarketHistory['events']> {
+    if (this.useTestFixtures()) return [];
+    try {
+      return (await YahooFinanceMarketDataProvider.getHistoryBetween(symbol, exchange, startDate, endDate)).events;
+    } catch {
+      return [];
+    }
+  }
+
+  static async getStockFundamentals(symbol: string, stockId?: string | number, quote?: StockQuote): Promise<StockFundamentalData> {
+    if (this.useTestFixtures()) return MockMarketDataProvider.getFundamentals(symbol);
+    const stored = stockId ? await StockRepository.getFundamentals(stockId) : null;
+    const resolvedQuote = quote || await this.getQuote(symbol);
     return {
-      indices: quotes,
-      india: quotes.filter(q => q.country === 'IN'),
-      us: quotes.filter(q => q.country === 'US'),
+      marketCap: numberOrNull(stored?.market_cap), peRatio: numberOrNull(stored?.pe_ratio), eps: numberOrNull(stored?.eps),
+      dividendYield: numberOrNull(stored?.dividend_yield), revenue: numberOrNull(stored?.revenue),
+      profit: numberOrNull(stored?.net_income), totalDebt: numberOrNull(stored?.total_debt),
+      fiftyTwoWeekHigh: resolvedQuote.fiftyTwoWeekHigh, fiftyTwoWeekLow: resolvedQuote.fiftyTwoWeekLow,
+      rsi14: null, sma50: null, sma200: null,
+      source: stored?.source || resolvedQuote.source, retrievedAt: stored?.source_timestamp || resolvedQuote.fetchedAt,
     };
   }
 
-  /**
-   * Stock Screener with AND-combined filtering, sorting, and pagination.
-   */
-  public static async screenStocks(filters: ScreenerFilters) {
-    this.assertMockIsAllowed();
-    const allStocks = await StockRepository.findAll();
-    let screened = await Promise.all(allStocks.map(async (stock) => {
+  static async getMarketOverview() {
+    const settled = await Promise.allSettled(INDEX_UNIVERSE.map(async index => {
+      const quote = this.useTestFixtures()
+        ? MockMarketDataProvider.getQuote(index.code)
+        : await YahooFinanceMarketDataProvider.getQuote(index.providerSymbol, index.exchange);
+      return { ...index, ...quote };
+    }));
+    const indices = settled.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
+    if (!indices.length) throw new AppError('Market overview is unavailable', 503, 'MARKET_DATA_UNAVAILABLE');
+    return { indices, india: indices.filter(item => item.country === 'IN'), us: indices.filter(item => item.country === 'US') };
+  }
+
+  static getHealth() {
+    if (this.useTestFixtures()) {
+      const now = new Date().toISOString();
+      return { provider: 'FINSIGHT_TEST_FIXTURE', status: 'healthy', lastSuccessfulRequest: now, latencyMs: 0, sampleQuoteTimestamp: now, freshness: 'SYNTHETIC' };
+    }
+    return YahooFinanceMarketDataProvider.getHealth();
+  }
+
+  static async screenStocks(filters: ScreenerFilters) {
+    const list = await StockRepository.list({
+      exchange: filters.exchange, country: filters.country, sector: filters.sector,
+      page: filters.page, limit: filters.limit,
+      sortBy: filters.sortBy === 'name' ? 'company' : 'symbol', sortOrder: filters.sortOrder,
+    });
+    const rows = await Promise.all(list.items.map(async stock => {
       const quote = await this.getQuote(stock.symbol, (stock as any).exchange_code);
-      const fund = MockMarketDataProvider.getFundamentals(stock.symbol);
+      const fund = await this.getStockFundamentals(stock.symbol, stock.id, quote);
       return {
-        id: stock.id,
-        symbol: stock.symbol,
-        name: stock.company_name,
-        exchange: stock.exchange,
-        exchangeCode: (stock as any).exchange_code,
-        countryCode: (stock as any).country_code,
-        currency: stock.currency,
-        sector: stock.sector,
-        price: quote.price,
-        changePercent: quote.changePercent,
-        volume: quote.volume,
-        marketCap: fund.marketCap,
-        peRatio: fund.peRatio,
-        eps: fund.eps,
-        dividendYield: fund.dividendYield,
-        revenue: fund.revenue,
-        profit: fund.profit,
-        debt: fund.totalDebt,
-        rsi14: fund.rsi14,
-        sma50: fund.sma50,
-        sma200: fund.sma200,
-        fiftyTwoWeekHigh: fund.fiftyTwoWeekHigh,
-        fiftyTwoWeekLow: fund.fiftyTwoWeekLow,
-        yearPosition: yearPosition(quote.price, fund.fiftyTwoWeekLow, fund.fiftyTwoWeekHigh),
+        id: stock.id, symbol: stock.symbol, name: stock.company_name, exchange: stock.exchange,
+        exchangeCode: (stock as any).exchange_code, countryCode: (stock as any).country_code,
+        currency: stock.currency, sector: stock.sector, price: quote.price, changePercent: quote.changePercent,
+        volume: quote.volume, marketCap: fund.marketCap, peRatio: fund.peRatio, eps: fund.eps,
+        dividendYield: fund.dividendYield, revenue: fund.revenue, profit: fund.profit, debt: fund.totalDebt,
+        rsi14: fund.rsi14, sma50: fund.sma50, sma200: fund.sma200,
+        fiftyTwoWeekHigh: fund.fiftyTwoWeekHigh, fiftyTwoWeekLow: fund.fiftyTwoWeekLow,
+        yearPosition: yearPosition(quote.price, fund.fiftyTwoWeekLow, fund.fiftyTwoWeekHigh), quote,
       };
     }));
-
-    // AND-Combined Filtering
-    if (filters.exchange) {
-      screened = screened.filter(s => s.exchange.toLowerCase() === filters.exchange!.toLowerCase() || s.exchangeCode?.toLowerCase() === filters.exchange!.toLowerCase());
-    }
-    if (filters.country) {
-      screened = screened.filter(s => s.countryCode?.toLowerCase() === filters.country!.toLowerCase());
-    }
-    if (filters.sector) {
-      screened = screened.filter(s => s.sector?.toLowerCase() === filters.sector!.toLowerCase());
-    }
-    if (filters.minPrice !== undefined) {
-      screened = screened.filter(s => s.price >= filters.minPrice!);
-    }
-    if (filters.maxPrice !== undefined) {
-      screened = screened.filter(s => s.price <= filters.maxPrice!);
-    }
-    if (filters.minPe !== undefined) {
-      screened = screened.filter(s => s.peRatio >= filters.minPe!);
-    }
-    if (filters.maxPe !== undefined) {
-      screened = screened.filter(s => s.peRatio <= filters.maxPe!);
-    }
-    if (filters.minEps !== undefined) screened = screened.filter(s => s.eps >= filters.minEps!);
-    if (filters.maxEps !== undefined) screened = screened.filter(s => s.eps <= filters.maxEps!);
-    if (filters.minDivYield !== undefined) {
-      screened = screened.filter(s => s.dividendYield >= filters.minDivYield!);
-    }
-    if (filters.maxDivYield !== undefined) screened = screened.filter(s => s.dividendYield <= filters.maxDivYield!);
-    if (filters.minMarketCap !== undefined) {
-      screened = screened.filter(s => s.marketCap >= filters.minMarketCap!);
-    }
-    if (filters.maxMarketCap !== undefined) screened = screened.filter(s => s.marketCap <= filters.maxMarketCap!);
-    if (filters.minRevenue !== undefined) screened = screened.filter(s => s.revenue >= filters.minRevenue!);
-    if (filters.maxRevenue !== undefined) screened = screened.filter(s => s.revenue <= filters.maxRevenue!);
-    if (filters.minProfit !== undefined) screened = screened.filter(s => s.profit >= filters.minProfit!);
-    if (filters.maxProfit !== undefined) screened = screened.filter(s => s.profit <= filters.maxProfit!);
-    if (filters.minDebt !== undefined) screened = screened.filter(s => s.debt >= filters.minDebt!);
-    if (filters.maxDebt !== undefined) screened = screened.filter(s => s.debt <= filters.maxDebt!);
-    if (filters.minVolume !== undefined) screened = screened.filter(s => s.volume >= filters.minVolume!);
-    if (filters.maxVolume !== undefined) screened = screened.filter(s => s.volume <= filters.maxVolume!);
-    if (filters.minRsi !== undefined) {
-      screened = screened.filter(s => s.rsi14 >= filters.minRsi!);
-    }
-    if (filters.maxRsi !== undefined) {
-      screened = screened.filter(s => s.rsi14 <= filters.maxRsi!);
-    }
-    if (filters.minYearPosition !== undefined) screened = screened.filter(s => s.yearPosition >= filters.minYearPosition!);
-    if (filters.maxYearPosition !== undefined) screened = screened.filter(s => s.yearPosition <= filters.maxYearPosition!);
-    if (filters.movingAverageRelation) {
-      screened = screened.filter(s => matchesMovingAverage(s, filters.movingAverageRelation!));
-    }
-
-    // Sorting
-    const sortBy = filters.sortBy || 'marketCap';
-    const sortOrder = filters.sortOrder === 'asc' ? 1 : -1;
-    screened.sort((a, b) => {
-      const valA = a[sortBy] ?? 0;
-      const valB = b[sortBy] ?? 0;
-      if (typeof valA === 'string' && typeof valB === 'string') return valA.localeCompare(valB) * sortOrder;
-      return (Number(valA) - Number(valB)) * sortOrder;
-    });
-
-    // Pagination
-    const page = Math.max(1, filters.page || 1);
-    const limit = Math.max(1, Math.min(100, filters.limit || 20));
-    const total = screened.length;
-    const items = screened.slice((page - 1) * limit, page * limit);
-
-    return {
-      items,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    const items = sortVisibleRows(rows.filter(item => matchesAvailableFilters(item, filters)), filters);
+    return { items, pagination: { page: list.page, limit: list.limit, total: list.total, totalPages: list.totalPages } };
   }
 }
 
-function yearPosition(price: number, low: number, high: number): number {
-  if (high <= low) return 0;
-  return Math.round(((price - low) / (high - low)) * 10000) / 100;
+function numberOrNull(value: unknown): number | null {
+  const parsed = Number(value);
+  return value == null || !Number.isFinite(parsed) ? null : parsed;
+}
+function yearPosition(price: number, low: number | null, high: number | null): number | null {
+  return low == null || high == null || high <= low ? null : Math.round((price - low) / (high - low) * 10000) / 100;
+}
+function matchesAvailableFilters(stock: Record<string, any>, filters: ScreenerFilters): boolean {
+  const checks: Array<[unknown, number | undefined, (a: number, b: number) => boolean]> = [
+    [stock.price, filters.minPrice, (a,b) => a >= b], [stock.price, filters.maxPrice, (a,b) => a <= b],
+    [stock.peRatio, filters.minPe, (a,b) => a >= b], [stock.peRatio, filters.maxPe, (a,b) => a <= b],
+    [stock.eps, filters.minEps, (a,b) => a >= b], [stock.eps, filters.maxEps, (a,b) => a <= b],
+    [stock.dividendYield, filters.minDivYield, (a,b) => a >= b], [stock.dividendYield, filters.maxDivYield, (a,b) => a <= b],
+    [stock.marketCap, filters.minMarketCap, (a,b) => a >= b], [stock.marketCap, filters.maxMarketCap, (a,b) => a <= b],
+    [stock.revenue, filters.minRevenue, (a,b) => a >= b], [stock.revenue, filters.maxRevenue, (a,b) => a <= b],
+    [stock.profit, filters.minProfit, (a,b) => a >= b], [stock.profit, filters.maxProfit, (a,b) => a <= b],
+    [stock.debt, filters.minDebt, (a,b) => a >= b], [stock.debt, filters.maxDebt, (a,b) => a <= b],
+    [stock.volume, filters.minVolume, (a,b) => a >= b], [stock.volume, filters.maxVolume, (a,b) => a <= b],
+    [stock.rsi14, filters.minRsi, (a,b) => a >= b], [stock.rsi14, filters.maxRsi, (a,b) => a <= b],
+    [stock.yearPosition, filters.minYearPosition, (a,b) => a >= b], [stock.yearPosition, filters.maxYearPosition, (a,b) => a <= b],
+  ];
+  if (!checks.every(([value, threshold, predicate]) => threshold === undefined || (typeof value === 'number' && predicate(value, threshold)))) return false;
+  const relation = filters.movingAverageRelation;
+  if (!relation) return true;
+  const price = stock.price as number;
+  const sma50 = stock.sma50 as number | null;
+  const sma200 = stock.sma200 as number | null;
+  if (relation === 'ABOVE_50') return sma50 !== null && price > sma50;
+  if (relation === 'BELOW_50') return sma50 !== null && price < sma50;
+  if (relation === 'ABOVE_200') return sma200 !== null && price > sma200;
+  if (relation === 'BELOW_200') return sma200 !== null && price < sma200;
+  if (relation === 'GOLDEN_CROSS') return sma50 !== null && sma200 !== null && sma50 > sma200;
+  return sma50 !== null && sma200 !== null && sma50 < sma200;
 }
 
-function matchesMovingAverage(
-  stock: { price: number; sma50: number; sma200: number },
-  relation: NonNullable<ScreenerFilters['movingAverageRelation']>,
-): boolean {
-  switch (relation) {
-    case 'ABOVE_50': return stock.price > stock.sma50;
-    case 'BELOW_50': return stock.price < stock.sma50;
-    case 'ABOVE_200': return stock.price > stock.sma200;
-    case 'BELOW_200': return stock.price < stock.sma200;
-    case 'GOLDEN_CROSS': return stock.sma50 > stock.sma200;
-    case 'DEATH_CROSS': return stock.sma50 < stock.sma200;
-  }
+function sortVisibleRows<T extends Record<string, any>>(rows: T[], filters: ScreenerFilters): T[] {
+  if (filters.sortBy === 'symbol' || filters.sortBy === 'name') return rows;
+  const field = ({ marketCap: 'marketCap', peRatio: 'peRatio', eps: 'eps', dividendYield: 'dividendYield', revenue: 'revenue', profit: 'profit', debt: 'debt', volume: 'volume', rsi14: 'rsi14', yearPosition: 'yearPosition', price: 'price' } as const)[filters.sortBy];
+  const direction = filters.sortOrder === 'asc' ? 1 : -1;
+  return rows.slice().sort((left, right) => {
+    const a = typeof left[field] === 'number' ? left[field] : null;
+    const b = typeof right[field] === 'number' ? right[field] : null;
+    if (a === null) return b === null ? 0 : 1;
+    if (b === null) return -1;
+    return (a - b) * direction;
+  });
 }

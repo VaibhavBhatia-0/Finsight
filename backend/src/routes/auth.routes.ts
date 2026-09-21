@@ -9,6 +9,7 @@ const router = Router();
 
 router.post('/register', rateLimit({ windowMs: 60_000, max: 10 }), validate({ body: registerSchema }), AuthController.register);
 router.post('/login', rateLimit({ windowMs: 60_000, max: 20 }), validate({ body: loginSchema }), AuthController.login);
+router.post('/logout', requireAuth, AuthController.logout);
 router.get('/me', requireAuth, AuthController.getMe);
 router.put('/preferences', requireAuth, validate({ body: updatePreferencesSchema }), AuthController.updatePreferences);
 router.post('/verification/request', rateLimit({ windowMs: 60_000, max: 5 }), validate({ body: emailActionRequestSchema }), AuthController.requestEmailVerification);

@@ -4,7 +4,7 @@ import api from '../api/client';
 import { endpoints } from '../api/endpoints';
 import { usePortfolios } from '../hooks/usePortfolios';
 
-type ReportType = 'portfolios' | 'portfolio_transactions' | 'scenarios' | 'backtests' | 'finance_summary' | 'finance_transactions';
+type ReportType = 'portfolios' | 'portfolio_transactions' | 'portfolio_intelligence' | 'scenarios' | 'backtests' | 'finance_summary' | 'finance_transactions';
 
 export default function ReportsPage() {
   const portfolios = usePortfolios();
@@ -21,7 +21,7 @@ export default function ReportsPage() {
       const result = await api.download(endpoints.reports.export, { params: {
         reportType,
         format: String(data.get('format')),
-        portfolioId: reportType === 'portfolio_transactions' ? String(data.get('portfolioId')) : undefined,
+        portfolioId: ['portfolio_transactions', 'portfolio_intelligence'].includes(reportType) ? String(data.get('portfolioId')) : undefined,
         startDate: String(data.get('startDate') || '') || undefined,
         endDate: String(data.get('endDate') || '') || undefined,
       } });
@@ -41,9 +41,9 @@ export default function ReportsPage() {
   return <main>
     <header className="page-heading"><div><p className="page-eyebrow">Analyze</p><h1>Reports</h1><p className="page-subtitle">Authenticated exports include their source, methodology, generation time, and educational-use disclaimer.</p></div></header>
     <form onSubmit={submit} className="panel grid max-w-3xl gap-4 rounded border p-4 sm:grid-cols-2">
-      <label className="text-sm">Report<select value={reportType} onChange={event => setReportType(event.target.value as ReportType)} className="mt-1 block w-full rounded border px-3 py-2"><option value="portfolios">Portfolio valuations</option><option value="portfolio_transactions">Portfolio transactions</option><option value="scenarios">Saved scenarios</option><option value="backtests">Backtests</option><option value="finance_summary">Finance summary</option><option value="finance_transactions">Finance transactions</option></select></label>
+      <label className="text-sm">Report<select value={reportType} onChange={event => setReportType(event.target.value as ReportType)} className="mt-1 block w-full rounded border px-3 py-2"><option value="portfolios">Portfolio valuations</option><option value="portfolio_intelligence">Portfolio intelligence</option><option value="portfolio_transactions">Portfolio transactions</option><option value="scenarios">Saved scenarios</option><option value="backtests">Backtests</option><option value="finance_summary">Finance summary</option><option value="finance_transactions">Finance transactions</option></select></label>
       <label className="text-sm">Format<select name="format" className="mt-1 block w-full rounded border px-3 py-2"><option value="csv">CSV</option><option value="pdf">PDF</option></select></label>
-      {reportType === 'portfolio_transactions' && <label className="text-sm sm:col-span-2">Portfolio<select name="portfolioId" required className="mt-1 block w-full rounded border px-3 py-2"><option value="">Select a portfolio</option>{portfolios.data?.map(item => <option key={item.portfolio.id} value={item.portfolio.id}>{item.portfolio.name}</option>)}</select></label>}
+      {['portfolio_transactions', 'portfolio_intelligence'].includes(reportType) && <label className="text-sm sm:col-span-2">Portfolio<select name="portfolioId" required className="mt-1 block w-full rounded border px-3 py-2"><option value="">Select a portfolio</option>{portfolios.data?.map(item => <option key={item.portfolio.id} value={item.portfolio.id}>{item.portfolio.name}</option>)}</select></label>}
       <label className="text-sm">From (optional)<input name="startDate" type="date" className="mt-1 block w-full rounded border px-3 py-2" /></label>
       <label className="text-sm">To (optional)<input name="endDate" type="date" className="mt-1 block w-full rounded border px-3 py-2" /></label>
       <button disabled={downloading || portfolios.isPending} className="rounded bg-gold-600 px-4 py-2 text-white sm:col-span-2">{downloading ? 'Preparing…' : 'Download report'}</button>
