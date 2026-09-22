@@ -39,8 +39,8 @@ export interface MarketQuote {
   exchange: string;
   currency: string;
   price: number;
-  change: number;
-  changePercent: number;
+  change: number | null;
+  changePercent: number | null;
   high: number | null;
   low: number | null;
   open: number | null;
@@ -84,14 +84,65 @@ export interface MarketStocksResponse {
   pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
+export interface SecuritySearchItem {
+  id: ApiId;
+  symbol: string;
+  display_symbol?: string;
+  provider_symbol?: string;
+  displaySymbol?: string;
+  providerSymbol?: string;
+  name: string;
+  exchange: string;
+  country: string;
+  currency: string;
+  asset_type?: string;
+  assetType?: string;
+}
+
+export interface SecuritySearchResponse {
+  items: SecuritySearchItem[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+}
+
+export interface SecurityQuoteResponse { security: SecuritySearchItem; quote: MarketQuote }
+export interface HistoricalPriceResponse {
+  security: SecuritySearchItem; requestedDate: string; priceDate: string; price: number; currency: string;
+  source: string; methodology: string;
+}
+
+export interface TechnicalPoint {
+  date: string; close: number; volume: number;
+  sma20: number | null; sma50: number | null; sma200: number | null; ema20: number | null; rsi14: number | null;
+  macd: number | null; macdSignal: number | null; macdHistogram: number | null;
+  bollingerUpper: number | null; bollingerMiddle: number | null; bollingerLower: number | null;
+}
+export interface TechnicalAnalysisResponse {
+  security: SecuritySearchItem; period: string; provider: string; fetchedAt: string; series: TechnicalPoint[];
+  summary: null | Omit<TechnicalPoint, 'date' | 'close' | 'volume' | 'bollingerUpper' | 'bollingerMiddle' | 'bollingerLower'> & { asOfDate: string; volatility: number | null; maxDrawdown: number | null };
+  methodology: string;
+}
+
+export interface MarketComparisonResponse {
+  securities: Array<{
+    security: SecuritySearchItem & { sector: string | null };
+    quote: MarketQuote | null; fundamentals: StockFundamentals;
+    performance: Record<'1D' | '5D' | '1M' | 'YTD' | '1Y' | '5Y' | 'MAX', number | null>;
+    risk: { volatility: number | null; maxDrawdown: number | null };
+    technicals: TechnicalAnalysisResponse['summary'];
+    normalizedSeries: Array<{ date: string; value: number }>;
+    availability: { quote: string; fundamentals: string; history: string };
+  }>;
+  methodology: string;
+}
+
 export interface MarketIndex {
   code: string;
   name: string;
   country: string;
   currency: string;
   price: number;
-  change: number;
-  changePercent: number;
+  change: number | null;
+  changePercent: number | null;
   freshness: MarketFreshness;
   freshnessLabel: MarketFreshness;
   marketTimestamp: string;
@@ -137,6 +188,7 @@ export interface Dividend {
   payment_date: string | null;
   amount: number;
   currency: string;
+  source?: string;
 }
 
 export interface CorporateAction {
@@ -146,6 +198,7 @@ export interface CorporateAction {
   action_date: string;
   ratio: number | null;
   description: string | null;
+  source?: string;
 }
 
 export interface StockDetail {
@@ -154,6 +207,7 @@ export interface StockDetail {
   fundamentals: StockFundamentals;
   dividends: Dividend[];
   corporateActions: CorporateAction[];
+  eventAvailability?: { dividends: string; splits: string; earnings: string };
 }
 
 export interface ScreenerStock {
@@ -165,8 +219,8 @@ export interface ScreenerStock {
   countryCode: string;
   currency: string;
   sector: string | null;
-  price: number;
-  changePercent: number;
+  price: number | null;
+  changePercent: number | null;
   volume: number | null;
   marketCap: number | null;
   peRatio: number | null;
@@ -181,7 +235,8 @@ export interface ScreenerStock {
   fiftyTwoWeekHigh: number | null;
   fiftyTwoWeekLow: number | null;
   yearPosition: number | null;
-  quote: MarketQuote;
+  volatility: number | null;
+  quote: MarketQuote | null;
 }
 
 export interface ScreenerResponse {
@@ -299,6 +354,20 @@ export interface PortfolioTransactionRequest {
 export interface PortfolioTransactionResponse {
   transaction: PortfolioTransactionRow;
   valuation: PortfolioValuation;
+}
+
+export interface PortfolioTransactionPreview {
+  security: { id: ApiId; symbol: string; providerSymbol: string; name: string; exchange: string };
+  transactionType: 'BUY' | 'SELL'; transactionDate: string; quantity: number; price: number;
+  assetCurrency: string; gross: number; fee: number; totalAssetCurrency: number;
+  portfolioCurrency: string; fxRate: number; fxRateDate: string; fxSource: string; portfolioCashImpact: number; methodology: string;
+}
+
+export type MarketAlertCondition = 'PRICE_ABOVE' | 'PRICE_BELOW' | 'DAILY_CHANGE_ABOVE' | 'DAILY_CHANGE_BELOW' | 'RSI_ABOVE' | 'RSI_BELOW';
+export interface MarketAlert {
+  id: ApiId; stock_id: ApiId; condition: MarketAlertCondition; threshold: number | string; enabled: boolean;
+  triggered_at: string | null; created_at: string; updated_at: string;
+  symbol: string; display_symbol: string; provider_symbol: string; company_name: string; currency: string; exchange_code: string; country_code: string;
 }
 
 export interface PortfolioBenchmark {

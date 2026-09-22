@@ -77,7 +77,7 @@ export default function DashboardPage() {
           {markets.data?.indices.filter(index => preferences.selectedMarketIndices.includes(index.code)).map(index => (
             <div className="data-row" key={index.code}>
               <div><strong>{index.name}</strong><p>{index.country} · {index.currency}</p></div>
-              <div className="text-right"><strong className="font-mono">{index.price.toLocaleString()}</strong><p className={index.changePercent >= 0 ? 'movement-up' : 'movement-down'}>{index.changePercent >= 0 ? '+' : ''}{index.changePercent.toFixed(2)}%</p></div>
+              <div className="text-right"><strong className="font-mono">{index.price.toLocaleString()}</strong><p className={movementClass(index.changePercent)}>{formatChange(index.changePercent)}</p></div>
             </div>
           ))}
         </div>}
@@ -88,7 +88,7 @@ export default function DashboardPage() {
         {watchlists.error ? <p className="error-banner" role="alert">Watchlist data is temporarily unavailable.</p> : allWatchItems.length ? <div className="data-list">{allWatchItems.slice(0, 5).map(item => (
           <Link to={`/markets/${item.symbol}`} className="data-row" key={`${item.watchlist_id}-${item.stock_id}`}>
             <div className="flex items-center gap-3"><span className="symbol-token">{item.symbol.slice(0, 2)}</span><div><strong>{item.symbol}</strong><p>{item.company_name}</p></div></div>
-            <div className="text-right">{item.quote ? <><strong className="font-mono">{item.currency} {item.quote.price.toFixed(2)}</strong><p className={item.quote.changePercent >= 0 ? 'movement-up' : 'movement-down'}>{item.quote.changePercent >= 0 ? '+' : ''}{item.quote.changePercent.toFixed(2)}%</p></> : <><strong>N/A</strong><p>Unavailable</p></>}</div>
+            <div className="text-right">{item.quote ? <><strong className="font-mono">{item.currency} {item.quote.price.toFixed(2)}</strong><p className={movementClass(item.quote.changePercent)}>{formatChange(item.quote.changePercent)}</p></> : <><strong>N/A</strong><p>Unavailable</p></>}</div>
           </Link>
         ))}</div> : <Empty text="Your watchlist is ready for its first asset." link="/markets" label="Browse markets" />}
       </Panel>
@@ -161,3 +161,5 @@ function money(value: number, currency: string) { return new Intl.NumberFormat('
 function signed(value: number) { return `${value >= 0 ? '+' : ''}${value.toFixed(2)}`; }
 function firstName(name?: string | null) { return name?.trim().split(/\s+/)[0] || 'Investor'; }
 function greeting() { const hour = new Date().getHours(); return hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'; }
+function movementClass(value: number | null) { return value == null ? '' : value >= 0 ? 'movement-up' : 'movement-down'; }
+function formatChange(value: number | null) { return value == null ? 'N/A' : `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`; }

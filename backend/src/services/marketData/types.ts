@@ -10,8 +10,8 @@ export interface StockQuote {
   exchange: string;
   currency: string;
   price: number;
-  change: number;
-  changePercent: number;
+  change: number | null;
+  changePercent: number | null;
   high: number | null;
   low: number | null;
   open: number | null;

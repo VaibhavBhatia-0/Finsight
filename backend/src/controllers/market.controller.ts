@@ -55,6 +55,38 @@ export class MarketController {
     } catch (error) { next(error); }
   }
 
+  static async searchSecurities(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try { sendSuccess(res, await StockRepository.searchSecurities(req.query as unknown as { q: string; page: number; pageSize: number }), 200, 'Reference'); }
+    catch (error) { next(error); }
+  }
+
+  static async getUniverseStats(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try { sendSuccess(res, await StockRepository.universeStats(), 200, 'Reference'); }
+    catch (error) { next(error); }
+  }
+
+  static async getSecurityQuote(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const value = await MarketDataService.getSecurityQuote(req.params.id);
+      sendSuccess(res, value, 200, value.quote.freshnessLabel, { source: value.quote.source, marketTimestamp: value.quote.marketTimestamp, fetchedAt: value.quote.fetchedAt, degraded: value.quote.isStale });
+    } catch (error) { next(error); }
+  }
+
+  static async getHistoricalPrice(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try { sendSuccess(res, await MarketDataService.getHistoricalPrice(req.params.id, String(req.query.date)), 200, 'Historical'); }
+    catch (error) { next(error); }
+  }
+
+  static async getTechnicals(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try { sendSuccess(res, await MarketDataService.getTechnicalAnalysis(req.params.id, String(req.query.period || '1Y') as any), 200, 'Historical'); }
+    catch (error) { next(error); }
+  }
+
+  static async compareSecurities(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try { sendSuccess(res, await MarketDataService.compareSecurities(req.body.securityIds), 200, 'Historical'); }
+    catch (error) { next(error); }
+  }
+
   static async getStockDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
@@ -69,12 +101,16 @@ export class MarketController {
       const dividends = dedupeBy([
         ...storedDividends,
         ...providerEvents.filter(event => event.type === 'DIVIDEND').map((event, index) => ({ id: `provider-dividend-${index}`, stock_id: stock.id, ex_date: event.date, payment_date: null, amount: event.amount, currency: event.currency, source: event.source })),
-      ], row => `${row.ex_date}:${Number(row.amount).toFixed(8)}`);
+      ], row => `${isoDate(row.ex_date)}:${Number(row.amount).toFixed(8)}`)
+        .map(row => ({ ...row, ex_date: isoDate(row.ex_date), source: row.source || 'DATABASE' }))
+        .sort((left, right) => left.ex_date.localeCompare(right.ex_date));
       const corporateActions = dedupeBy([
         ...storedActions,
         ...providerEvents.filter(event => event.type === 'SPLIT').map((event, index) => ({ id: `provider-split-${index}`, stock_id: stock.id, action_type: 'SPLIT', action_date: event.date, ratio: event.ratio, description: `Provider-reported split (${event.ratio}:1)`, source: event.source })),
-      ], row => `${row.action_date}:${row.action_type}:${Number(row.ratio).toFixed(8)}`);
-      sendSuccess(res, { stock, quote, fundamentals, dividends, corporateActions }, 200, quote.freshnessLabel, {
+      ], row => `${isoDate(row.action_date)}:${row.action_type}:${Number(row.ratio).toFixed(8)}`)
+        .map(row => ({ ...row, action_date: isoDate(row.action_date), source: row.source || 'DATABASE' }))
+        .sort((left, right) => left.action_date.localeCompare(right.action_date));
+      sendSuccess(res, { stock, quote, fundamentals, dividends, corporateActions, eventAvailability: { dividends: 'AVAILABLE_WHEN_REPORTED', splits: 'AVAILABLE_WHEN_REPORTED', earnings: 'UNAVAILABLE_FROM_CURRENT_PROVIDER' } }, 200, quote.freshnessLabel, {
         source: quote.source, marketTimestamp: quote.marketTimestamp, fetchedAt: quote.fetchedAt, degraded: quote.isStale,
       });
     } catch (error) { next(error); }
@@ -100,7 +136,8 @@ export class MarketController {
   static async screenStocks(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const results = await MarketDataService.screenStocks(req.query as unknown as ScreenerFilters);
-      const freshness = results.items.length ? aggregateFreshness(results.items.map(item => item.quote.freshnessLabel)) : 'UNAVAILABLE';
+      const quoted = results.items.flatMap(item => item.quote ? [item.quote.freshnessLabel] : []);
+      const freshness = quoted.length ? aggregateFreshness(quoted) : 'UNAVAILABLE';
       sendSuccess(res, results, 200, freshness, { source: process.env.NODE_ENV === 'test' ? 'FINSIGHT_TEST_FIXTURE' : 'YAHOO_FINANCE_CHART' });
     } catch (error) { next(error); }
   }
@@ -113,6 +150,8 @@ export class MarketController {
     } catch (error) { next(error); }
   }
 }
+
+function isoDate(value: string | Date): string { return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10); }
 
 function aggregateFreshness(values: MarketFreshness[]): MarketFreshness {
   const order: MarketFreshness[] = ['UNAVAILABLE', 'STALE', 'SYNTHETIC', 'LAST CLOSE', 'DELAYED', 'LIVE'];

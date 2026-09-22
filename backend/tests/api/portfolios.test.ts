@@ -200,6 +200,16 @@ describe('Portfolios & Watchlists API Integration Tests', () => {
     expect(data.data.valuation.summary.cashBalance).toBe(62700);
   });
 
+  it('8b. previews a USD trade in an INR portfolio with authoritative transaction-date FX', async () => {
+    const response = await fetch(`${baseUrl}/api/v1/portfolios/${portfolioId}/transaction-preview`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ stockId: 6, transactionType: 'BUY', transactionDate: '2024-01-15', quantity: 2, price: 100, feeAmount: 2 }),
+    });
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.data).toMatchObject({ assetCurrency: 'USD', portfolioCurrency: 'INR', gross: 200, fee: 2, totalAssetCurrency: 202, fxRate: 83.3, fxRateDate: '2024-01-02', portfolioCashImpact: -16826.6 });
+  });
+
   it('9. updates benchmark/targets and returns reconciled portfolio intelligence', async () => {
     const update = await fetch(`${baseUrl}/api/v1/portfolios/${portfolioId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },

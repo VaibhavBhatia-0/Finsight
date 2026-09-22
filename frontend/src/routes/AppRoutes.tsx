@@ -11,6 +11,7 @@ const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPasswordPage')
 const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPasswordPage'));
 const VerifyEmailPage = lazy(() => import('../pages/auth/VerifyEmailPage'));
 const MarketsPage = lazy(() => import('../pages/MarketsPage'));
+const MarketComparePage = lazy(() => import('../pages/MarketComparePage'));
 const StockDetailPage = lazy(() => import('../pages/StockDetailPage'));
 const ScreenerPage = lazy(() => import('../pages/ScreenerPage'));
 const WatchlistPage = lazy(() => import('../pages/WatchlistPage'));
@@ -53,6 +54,7 @@ const AppRoutes: React.FC = () => {
       {/* Public research pages and protected tools share the same visual shell. */}
       <Route element={<AppLayout />}>
         <Route path="/markets" element={<MarketsPage />} />
+        <Route path="/markets/compare" element={<MarketComparePage />} />
         <Route path="/markets/:symbol" element={<StockDetailPage />} />
         <Route path="/screener" element={<ScreenerPage />} />
         <Route element={<RequireAuth />}>

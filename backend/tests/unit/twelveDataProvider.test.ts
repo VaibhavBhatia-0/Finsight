@@ -32,4 +32,16 @@ describe('Twelve Data market-data adapter', () => {
 
     await expect(TwelveDataMarketDataProvider.getQuote('AAPL')).rejects.toMatchObject({ code: 'MARKET_DATA_INVALID', statusCode: 503 });
   });
+
+  it('leaves unavailable quote fields null instead of fabricating zeroes or prices', async () => {
+    vi.stubEnv('MARKET_DATA_PROVIDER', 'twelve_data');
+    vi.stubEnv('TWELVE_DATA_API_KEY', 'test-key');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      symbol: 'AAPL', close: '201.20', datetime: '2026-09-11',
+    }), { status: 200 })));
+
+    const quote = await TwelveDataMarketDataProvider.getQuote('AAPL');
+
+    expect(quote).toMatchObject({ previousClose: null, change: null, changePercent: null, open: null, high: null, low: null, volume: null });
+  });
 });

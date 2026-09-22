@@ -43,3 +43,12 @@ export const portfolioTransactionSchema = z.object({
   fxRate: z.coerce.number().positive().optional(),
   notes: z.string().max(1000).optional(),
 });
+
+export const portfolioTransactionPreviewSchema = z.object({
+  stockId: z.coerce.number().int().positive(),
+  transactionType: z.enum(['BUY', 'SELL']),
+  transactionDate: isoDate,
+  quantity: z.coerce.number().positive(),
+  price: z.coerce.number().positive(),
+  feeAmount: z.coerce.number().nonnegative().default(0),
+});

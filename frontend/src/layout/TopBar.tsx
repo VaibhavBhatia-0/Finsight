@@ -10,9 +10,11 @@ import { useAuth } from '../hooks/useAuth';
 
 const routeLabels: Array<[RegExp, string, string]> = [
   [/^\/dashboard/, 'Overview', 'Dashboard'],
+  [/^\/markets\/compare/, 'Invest', 'Compare securities'],
   [/^\/markets\//, 'Invest', 'Stock detail'],
   [/^\/markets/, 'Invest', 'Markets'],
   [/^\/watchlist/, 'Invest', 'Watchlist'],
+  [/^\/portfolios\/compare/, 'Invest', 'Compare portfolios'],
   [/^\/portfolios\//, 'Invest', 'Portfolio detail'],
   [/^\/portfolios/, 'Invest', 'Portfolios'],
   [/^\/screener/, 'Invest', 'Stock screener'],
@@ -58,7 +60,7 @@ export default function TopBar({ onMenu }: { onMenu: () => void }) {
           <span className="tape-item" key={index.code}>
             <span className="tape-symbol">{index.name}</span>
             <span className="tape-price">{index.price.toLocaleString()}</span>
-            <span className={index.changePercent >= 0 ? 'movement-up' : 'movement-down'}>{index.changePercent >= 0 ? '+' : ''}{index.changePercent.toFixed(2)}%</span>
+            <span className={movementClass(index.changePercent)}>{formatChange(index.changePercent)}</span>
           </span>
         ))}
         {markets.isError && <span className="tape-item movement-down">Market feed unavailable</span>}
@@ -90,3 +92,6 @@ export default function TopBar({ onMenu }: { onMenu: () => void }) {
     </header>
   );
 }
+
+function movementClass(value: number | null) { return value == null ? '' : value >= 0 ? 'movement-up' : 'movement-down'; }
+function formatChange(value: number | null) { return value == null ? 'N/A' : `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`; }

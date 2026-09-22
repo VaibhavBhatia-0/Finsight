@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
-import type { ApiId, PortfolioBenchmark, PortfolioComparison, PortfolioIntelligence, PortfolioTransactionRequest, PortfolioTransactionResponse, PortfolioTransactionRow, PortfolioValuation } from '../api/contracts';
+import type { ApiId, PortfolioBenchmark, PortfolioComparison, PortfolioIntelligence, PortfolioTransactionPreview, PortfolioTransactionRequest, PortfolioTransactionResponse, PortfolioTransactionRow, PortfolioValuation } from '../api/contracts';
 import { endpoints } from '../api/endpoints';
 
 export function usePortfolios() {
@@ -74,6 +74,18 @@ export function useAddPortfolioTransaction(id?: ApiId) {
       void client.invalidateQueries({ queryKey: ['portfolios'] });
       void client.invalidateQueries({ queryKey: ['portfolio-intelligence', id] });
     },
+  });
+}
+
+export function usePortfolioTransactionPreview(id: ApiId | undefined, input?: {
+  stockId: ApiId; transactionType: 'BUY' | 'SELL'; transactionDate: string; quantity: number; price: number; feeAmount: number;
+}) {
+  return useQuery({
+    queryKey: ['portfolio-transaction-preview', id, input],
+    queryFn: async () => (await api.post<PortfolioTransactionPreview>(endpoints.portfolios.transactionPreview(id!), input)).data,
+    enabled: id !== undefined && Boolean(input),
+    staleTime: 60_000,
+    retry: false,
   });
 }
 

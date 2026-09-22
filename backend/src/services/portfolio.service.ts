@@ -268,6 +268,9 @@ export class PortfolioService {
 
     const currency = String(txData.currency || stock?.currency || portfolio.base_currency).toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw new AppError('Currency must be a three-letter ISO code', 400, 'INVALID_CURRENCY');
+    if (stock && ['BUY', 'SELL'].includes(transactionType) && currency !== String(stock.currency).toUpperCase()) {
+      throw new AppError(`Trade price must remain in the asset currency (${stock.currency})`, 400, 'ASSET_CURRENCY_MISMATCH');
+    }
     const fxRate = currency === portfolio.base_currency
       ? 1
       : (txData.fxRate ? Number(txData.fxRate) : await FXService.getRate(currency, portfolio.base_currency, txData.transactionDate));
@@ -308,6 +311,30 @@ export class PortfolioService {
       await this.calculateState(portfolioId, portfolio.base_currency, true, executor);
       return tx;
     });
+  }
+
+  public static async previewTransaction(userId: string, portfolioId: string | number, input: {
+    stockId: string | number; transactionType: 'BUY' | 'SELL'; transactionDate: string;
+    quantity: number; price: number; feeAmount: number;
+  }) {
+    const portfolio = await PortfolioRepository.findById(portfolioId, userId);
+    if (!portfolio) throw new AppError('Portfolio not found', 404, 'PORTFOLIO_NOT_FOUND');
+    const stock = await StockRepository.findById(input.stockId);
+    if (!stock || !stock.is_active) throw new AppError('Security not found', 404, 'SECURITY_NOT_FOUND');
+    const gross = Number(input.quantity) * Number(input.price);
+    const fee = Number(input.feeAmount || 0);
+    const fx = await FXService.getRateInfo(stock.currency, portfolio.base_currency, input.transactionDate);
+    const totalAssetCurrency = input.transactionType === 'BUY' ? gross + fee : gross - fee;
+    const cashImpact = totalAssetCurrency * fx.rate * (input.transactionType === 'BUY' ? -1 : 1);
+    return {
+      security: { id: stock.id, symbol: stock.symbol, providerSymbol: stock.provider_symbol, name: stock.company_name, exchange: stock.exchange_code },
+      transactionType: input.transactionType, transactionDate: input.transactionDate,
+      quantity: Number(input.quantity), price: Number(input.price), assetCurrency: stock.currency,
+      gross: round2(gross), fee: round2(fee), totalAssetCurrency: round2(totalAssetCurrency),
+      portfolioCurrency: portfolio.base_currency, fxRate: fx.rate, fxRateDate: fx.rateDate,
+      fxSource: fx.source, portfolioCashImpact: round2(cashImpact),
+      methodology: 'quantity × transaction-date asset price, plus/minus fee, converted using transaction-date FX into portfolio base currency.',
+    };
   }
 
   public static async updatePortfolio(userId: string, portfolioId: string | number, data: {

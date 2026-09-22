@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PortfolioController } from '../controllers/portfolio.controller';
 import { requireAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
-import { createPortfolioSchema, portfolioComparisonSchema, portfolioIdParamsSchema, portfolioTransactionSchema, updatePortfolioSchema } from '../validators/portfolio.validator';
+import { createPortfolioSchema, portfolioComparisonSchema, portfolioIdParamsSchema, portfolioTransactionPreviewSchema, portfolioTransactionSchema, updatePortfolioSchema } from '../validators/portfolio.validator';
 import { rateLimit } from '../middleware/rateLimit';
 
 const router = Router();
@@ -17,6 +17,7 @@ router.get('/:id', validate({ params: portfolioIdParamsSchema }), PortfolioContr
 router.patch('/:id', validate({ params: portfolioIdParamsSchema, body: updatePortfolioSchema }), PortfolioController.updatePortfolio);
 router.get('/:id/intelligence', rateLimit({ windowMs: 60_000, max: 20 }), validate({ params: portfolioIdParamsSchema }), PortfolioController.getIntelligence);
 router.get('/:id/transactions', validate({ params: portfolioIdParamsSchema }), PortfolioController.getTransactions);
+router.post('/:id/transaction-preview', rateLimit({ windowMs: 60_000, max: 60 }), validate({ params: portfolioIdParamsSchema, body: portfolioTransactionPreviewSchema }), PortfolioController.previewTransaction);
 router.post('/:id/transactions', validate({ params: portfolioIdParamsSchema, body: portfolioTransactionSchema }), PortfolioController.addTransaction);
 router.delete('/:id', validate({ params: portfolioIdParamsSchema }), PortfolioController.deletePortfolio);
 

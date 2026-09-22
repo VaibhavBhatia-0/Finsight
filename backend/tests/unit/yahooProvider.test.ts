@@ -32,8 +32,31 @@ describe('Yahoo Finance market-data adapter', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(chart()), { status: 200 })));
     const quote = await YahooFinanceMarketDataProvider.getQuote('AAPL', 'NASDAQ');
     expect(quote).toMatchObject({ symbol: 'AAPL', providerSymbol: 'AAPL', provider: 'YAHOO_FINANCE_CHART', exchange: 'NasdaqGS', currency: 'USD', price: 220.25, freshnessLabel: 'LIVE', isDelayed: false, isStale: false });
+    expect(quote.change).toBe(1.75);
+    expect(quote.changePercent).toBeCloseTo(0.800915, 6);
     expect(quote.freshnessSeconds).toBeLessThanOrEqual(1);
     expect(new Date(quote.marketTimestamp).getTime()).not.toBeNaN();
+  });
+
+  it('calculates negative, zero, and unavailable previous-close changes from one snapshot safely', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(chart({ regularMarketPrice: 90, chartPreviousClose: 100 })), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(chart({ regularMarketPrice: 100, chartPreviousClose: 100 })), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(chart({ regularMarketPrice: 100, chartPreviousClose: 0, previousClose: 0 })), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const negative = await YahooFinanceMarketDataProvider.getQuote('NEGATIVE_CASE', 'NYSE');
+    const unchanged = await YahooFinanceMarketDataProvider.getQuote('ZERO_CASE', 'NYSE');
+    const unavailable = await YahooFinanceMarketDataProvider.getQuote('NO_PREVIOUS_CASE', 'NYSE');
+    expect(negative).toMatchObject({ price: 90, previousClose: 100, change: -10, changePercent: -10 });
+    expect(unchanged).toMatchObject({ price: 100, previousClose: 100, change: 0, changePercent: 0 });
+    expect(unavailable).toMatchObject({ price: 100, previousClose: null, change: null, changePercent: null });
+  });
+
+  it('maps the four canonical market overview symbols without altering index tickers', () => {
+    expect(YahooFinanceMarketDataProvider.providerSymbol('^NSEI', 'NSE')).toBe('^NSEI');
+    expect(YahooFinanceMarketDataProvider.providerSymbol('^BSESN', 'BSE')).toBe('^BSESN');
+    expect(YahooFinanceMarketDataProvider.providerSymbol('^GSPC', 'NYSE')).toBe('^GSPC');
+    expect(YahooFinanceMarketDataProvider.providerSymbol('^IXIC', 'NASDAQ')).toBe('^IXIC');
   });
 
   it('maps exchange suffixes and provider-declared delay', async () => {

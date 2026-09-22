@@ -87,6 +87,11 @@ export class PortfolioController {
     }
   }
 
+  static async previewTransaction(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try { sendSuccess(res, await PortfolioService.previewTransaction(req.user!.id, req.params.id, req.body), 200, 'Historical'); }
+    catch (error) { next(error); }
+  }
+
   static async deletePortfolio(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;

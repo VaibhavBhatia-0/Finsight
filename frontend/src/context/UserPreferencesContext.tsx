@@ -74,7 +74,7 @@ function layout(preferences: DashboardPreferences): UserPreferences['dashboard_l
 const UserPreferencesContext = createContext<UserPreferencesContextValue | undefined>(undefined);
 
 export const UserPreferencesProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { preferences: serverPreferences, updatePreferences } = useAuth();
+  const { user, preferences: serverPreferences, updatePreferences } = useAuth();
   const [preferences, setPreferences] = useState(() => fromServer(serverPreferences));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -84,6 +84,10 @@ export const UserPreferencesProvider: React.FC<{ children: ReactNode }> = ({ chi
   const persist = async (next: DashboardPreferences, updates: Parameters<typeof updatePreferences>[0]) => {
     const previous = preferences;
     setPreferences(next);
+    if (!user) {
+      setError(null);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {

@@ -23,6 +23,12 @@ export const endpoints = {
     stockPrices: (id: ApiId) => `/api/v1/markets/stocks/${pathId(id)}/prices`,
     screener: '/api/v1/markets/screener',
     fx: '/api/v1/markets/fx',
+    securitySearch: '/api/v1/markets/securities/search',
+    universeStats: '/api/v1/markets/securities/stats',
+    securityQuote: (id: ApiId) => `/api/v1/markets/securities/${pathId(id)}/quote`,
+    historicalPrice: (id: ApiId) => `/api/v1/markets/securities/${pathId(id)}/historical-price`,
+    technicals: (id: ApiId) => `/api/v1/markets/securities/${pathId(id)}/technicals`,
+    compare: '/api/v1/markets/compare',
   },
   watchlists: {
     list: '/api/v1/watchlists',
@@ -39,6 +45,12 @@ export const endpoints = {
     intelligence: (portfolioId: ApiId) => `/api/v1/portfolios/${pathId(portfolioId)}/intelligence`,
     benchmarks: '/api/v1/portfolios/benchmarks',
     compare: '/api/v1/portfolios/compare',
+    transactionPreview: (portfolioId: ApiId) => `/api/v1/portfolios/${pathId(portfolioId)}/transaction-preview`,
+  },
+  alerts: {
+    list: '/api/v1/alerts',
+    create: '/api/v1/alerts',
+    detail: (id: ApiId) => `/api/v1/alerts/${pathId(id)}`,
   },
   planning: {
     requiredContribution: '/api/v1/planning/required-contribution',

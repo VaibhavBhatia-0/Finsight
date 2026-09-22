@@ -110,9 +110,19 @@ export function getDatabaseClient(forceDriver?: 'pg' | 'pglite', customDirOrUrl?
     return dbInstance;
   }
 
-  const driver = forceDriver || process.env.DB_DRIVER || 'pglite';
+  const configuredDriver = process.env.DB_DRIVER?.toLowerCase();
+  if (configuredDriver && configuredDriver !== 'pg' && configuredDriver !== 'pglite') {
+    throw new Error('DB_DRIVER must be either pg or pglite');
+  }
+  const driver = forceDriver || configuredDriver || (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL ? 'pg' : 'pglite');
+  if (process.env.NODE_ENV === 'production' && !forceDriver && driver !== 'pg') {
+    throw new Error('Production requires PostgreSQL; set DB_DRIVER=pg and DATABASE_URL');
+  }
+  if (driver === 'pg' && !customDirOrUrl && !process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is required when DB_DRIVER=pg');
+  }
 
-  if (driver === 'pg' && process.env.DATABASE_URL) {
+  if (driver === 'pg') {
     dbInstance = new PostgresClient(customDirOrUrl);
   } else {
     // PGlite runs the genuine WASM-compiled PostgreSQL 16 engine directly

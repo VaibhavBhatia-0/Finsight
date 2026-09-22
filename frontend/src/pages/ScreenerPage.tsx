@@ -9,14 +9,16 @@ import { endpoints } from "../api/endpoints";
 import { FreshnessBadge } from "../components/FreshnessBadge";
 import { useWatchlist } from "../hooks/useWatchlist";
 import { useAuth } from "../hooks/useAuth";
+import StockSearchInput from "../components/StockSearchInput";
 
-type NumericFilterKey = 'minMarketCap' | 'maxMarketCap' | 'minPrice' | 'maxPrice' | 'minPe' | 'maxPe' | 'minEps' | 'maxEps' | 'minDivYield' | 'maxDivYield' | 'minRevenue' | 'maxRevenue' | 'minProfit' | 'maxProfit' | 'minDebt' | 'maxDebt' | 'minVolume' | 'maxVolume' | 'minRsi' | 'maxRsi' | 'minYearPosition' | 'maxYearPosition';
-type ScreenerSort = 'symbol' | 'price' | 'marketCap' | 'peRatio' | 'eps' | 'dividendYield' | 'volume' | 'rsi14' | 'yearPosition';
+type NumericFilterKey = 'minMarketCap' | 'maxMarketCap' | 'minPrice' | 'maxPrice' | 'minPe' | 'maxPe' | 'minEps' | 'maxEps' | 'minDivYield' | 'maxDivYield' | 'minRevenue' | 'maxRevenue' | 'minProfit' | 'maxProfit' | 'minDebt' | 'maxDebt' | 'minVolume' | 'maxVolume' | 'maxVolatility' | 'minRsi' | 'maxRsi' | 'minYearPosition' | 'maxYearPosition';
+type ScreenerSort = 'symbol' | 'price' | 'marketCap' | 'peRatio' | 'eps' | 'dividendYield' | 'volume' | 'volatility' | 'rsi14' | 'yearPosition';
 
 const numericDefaults: Record<NumericFilterKey, string> = {
   minMarketCap: '', maxMarketCap: '', minPrice: '', maxPrice: '', minPe: '', maxPe: '',
   minEps: '', maxEps: '', minDivYield: '', maxDivYield: '', minRevenue: '', maxRevenue: '',
   minProfit: '', maxProfit: '', minDebt: '', maxDebt: '', minVolume: '', maxVolume: '',
+  maxVolatility: '',
   minRsi: '', maxRsi: '', minYearPosition: '', maxYearPosition: '',
 };
 
@@ -34,10 +36,20 @@ const rangeFields: Array<{ label: string; min: NumericFilterKey; max: NumericFil
   { label: '52-week position (%)', min: 'minYearPosition', max: 'maxYearPosition', step: '0.01', minValue: 0, maxValue: 100 },
 ];
 
+const presets: Array<{ name: string; description: string; values: Partial<Record<NumericFilterKey, string>>; sort?: ScreenerSort; descending?: boolean }> = [
+  { name: 'Value', description: 'Positive EPS and P/E up to 20', values: { minEps: '0', maxPe: '20' }, sort: 'peRatio' },
+  { name: 'Growth', description: 'Positive revenue, profit, and EPS', values: { minRevenue: '1', minProfit: '1', minEps: '0' }, sort: 'marketCap', descending: true },
+  { name: 'Dividend', description: 'Sourced dividend yield of at least 1%', values: { minDivYield: '1' }, sort: 'dividendYield', descending: true },
+  { name: 'Momentum', description: 'Price in the upper 30% of its sourced 52-week range', values: { minYearPosition: '70' }, sort: 'yearPosition', descending: true },
+  { name: 'Large Cap', description: 'Market capitalization of at least 10 billion', values: { minMarketCap: '10000000000' }, sort: 'marketCap', descending: true },
+  { name: 'Low Volatility', description: 'Annualized volatility up to 20% when cached history exists', values: { maxVolatility: '20' }, sort: 'volatility' },
+];
+
 export const ScreenerPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const watchlist = useWatchlist(Boolean(user));
+  const [securitySearch, setSecuritySearch] = useState('');
 
   // Filter state
   const [exchange, setExchange] = useState("");
@@ -92,6 +104,11 @@ export const ScreenerPage: React.FC = () => {
     setSortDesc(false);
   };
 
+  const applyPreset = (preset: typeof presets[number]) => {
+    setNumericFilters({ ...numericDefaults, ...preset.values });
+    setMovingAverageRelation(''); setPage(1); setSortField(preset.sort ?? 'symbol'); setSortDesc(Boolean(preset.descending));
+  };
+
   const toggleSort = (field: ScreenerSort) => {
     if (sortField === field) setSortDesc(!sortDesc);
     else {
@@ -105,7 +122,8 @@ export const ScreenerPage: React.FC = () => {
 
   return (
     <main>
-      <header className="page-heading"><div><p className="page-eyebrow">Invest</p><h1 className="flex items-center"><Search className="mr-3 text-gold-400" aria-hidden="true" /> Stock screener</h1><p className="page-subtitle">Filter the real security universe. Metrics without a sourced observation remain N/A; quote and fundamental sorts apply only to the visible page to avoid an expensive live-quote fan-out.</p></div>{displayedStocks[0] && <FreshnessBadge freshness={displayedStocks[0].quote.freshnessLabel} timestamp={displayedStocks[0].quote.marketTimestamp} />}</header>
+      <header className="page-heading"><div><p className="page-eyebrow">Invest</p><h1 className="flex items-center"><Search className="mr-3 text-gold-400" aria-hidden="true" /> Stock screener</h1><p className="page-subtitle">Server-side filtering, sorting, and pagination across sourced observations. Presets are editable filter configurations, not recommendations; unavailable metrics are excluded.</p></div>{displayedStocks.find(stock => stock.quote)?.quote && <FreshnessBadge freshness={displayedStocks.find(stock => stock.quote)!.quote!.freshnessLabel} timestamp={displayedStocks.find(stock => stock.quote)!.quote!.marketTimestamp} />}</header>
+      <section className="panel mb-4"><div className="max-w-xl"><StockSearchInput label="Open a specific listed security" value={securitySearch} onChange={setSecuritySearch} onSelect={security => { if (security) navigate(`/markets/${encodeURIComponent(security.providerSymbol ?? security.provider_symbol ?? security.symbol)}`); }} /></div><div className="mt-4 flex flex-wrap gap-2" aria-label="Screener presets">{presets.map(preset => <button key={preset.name} type="button" className="btn-secondary px-3 py-2 text-sm" title={preset.description} onClick={() => applyPreset(preset)}>{preset.name}</button>)}</div></section>
       <section
         className="panel screener-filter-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 p-4 border rounded"
         aria-label="Filter panel"
@@ -152,6 +170,7 @@ export const ScreenerPage: React.FC = () => {
             </div>
           </fieldset>
         ))}
+        <fieldset className="rounded border p-2"><legend className="px-1 text-sm font-medium">Annualized volatility (%)</legend><input aria-label="Maximum annualized volatility" type="number" placeholder="Maximum" value={numericFilters.maxVolatility} min="0" step="0.01" onChange={event => setNumericFilters(current => ({ ...current, maxVolatility: event.target.value }))} className="w-full rounded border px-2 py-1" /></fieldset>
         <div className="flex flex-col">
           <label htmlFor="moving-average" className="text-sm font-medium mb-1">Moving-average relation</label>
           <select id="moving-average" value={movingAverageRelation} onChange={event => setMovingAverageRelation(event.target.value)} className="rounded border px-2 py-1">
@@ -191,6 +210,7 @@ export const ScreenerPage: React.FC = () => {
                 <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("eps")}>EPS {sortField === "eps" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
                 <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("dividendYield")}>Yield {sortField === "dividendYield" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
                 <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("rsi14")}>RSI {sortField === "rsi14" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
+                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("volatility")}>Volatility {sortField === "volatility" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
                 <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("yearPosition")}>52-week position {sortField === "yearPosition" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
                 <th className="px-4 py-2 text-left">Freshness</th>
                 <th className="px-4 py-2 text-left">Watchlist</th>
@@ -201,7 +221,7 @@ export const ScreenerPage: React.FC = () => {
                 <tr key={stock.symbol} className="border-t dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer" onClick={() => navigate(`/markets/${stock.symbol}`)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") navigate(`/markets/${stock.symbol}`); }}>
                   <td className="px-4 py-2 font-mono">{stock.symbol}</td>
                   <td className="px-4 py-2">{stock.name}</td>
-                  <td className="px-4 py-2">{stock.price.toFixed(2)}</td>
+                  <td className="px-4 py-2">{optionalNumber(stock.price)}</td>
                   <td className="px-4 py-2">{stock.exchange}</td>
                   <td className="px-4 py-2">{stock.sector}</td>
                   <td className="px-4 py-2">{optionalCompact(stock.marketCap)}</td>
@@ -209,8 +229,9 @@ export const ScreenerPage: React.FC = () => {
                   <td className="px-4 py-2">{optionalNumber(stock.eps)}</td>
                   <td className="px-4 py-2">{optionalPercent(stock.dividendYield)}</td>
                   <td className="px-4 py-2">{optionalNumber(stock.rsi14)}</td>
+                  <td className="px-4 py-2">{optionalPercent(stock.volatility)}</td>
                   <td className="px-4 py-2">{optionalPercent(stock.yearPosition)}</td>
-                  <td className="px-4 py-2"><FreshnessBadge freshness={stock.quote.freshnessLabel} timestamp={stock.quote.marketTimestamp} /></td>
+                  <td className="px-4 py-2">{stock.quote ? <FreshnessBadge freshness={stock.quote.freshnessLabel} timestamp={stock.quote.marketTimestamp} /> : <FreshnessBadge freshness="UNAVAILABLE" />}</td>
                   <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
                     <button onClick={() => user ? watchlist.addToWatchlist(stock.id) : navigate('/login')} className="text-primary hover:text-primary-dark" aria-label={`Add ${stock.symbol} to watchlist`}>
                       <Plus size={16} aria-hidden="true" />

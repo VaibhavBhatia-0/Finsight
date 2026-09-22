@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3, BriefcaseBusiness, ChartNoAxesCombined, FileDown, FlaskConical,
   Gauge, Landmark, LineChart, ListChecks, ReceiptText, Repeat2, SearchCode,
-  Settings, Sparkles, Star, Target, WalletCards,
+  Scale, Settings, Sparkles, Star, Target, WalletCards,
 } from 'lucide-react';
 import BrandLogo from '../components/BrandLogo';
 
@@ -20,6 +20,7 @@ const groups: Array<{ label: string; items: NavItem[] }> = [
     label: 'Invest',
     items: [
       { to: '/markets', label: 'Markets', icon: LineChart, end: true },
+      { to: '/markets/compare', label: 'Compare stocks', icon: Scale },
       { to: '/watchlist', label: 'Watchlist', icon: Star },
       { to: '/portfolios', label: 'Portfolios', icon: BriefcaseBusiness },
       { to: '/screener', label: 'Stock screener', icon: SearchCode },

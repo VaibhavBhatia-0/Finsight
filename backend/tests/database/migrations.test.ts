@@ -27,7 +27,7 @@ describe('PostgreSQL Database Schema & Migration Verification', () => {
     }
   });
 
-  it('2. Confirms all 31 distinct entity tables exist in PostgreSQL information_schema', async () => {
+  it('2. Confirms all 32 distinct entity tables exist in PostgreSQL information_schema', async () => {
     const res = await pg.query<{ table_name: string }>(`
       SELECT table_name 
       FROM information_schema.tables 
@@ -68,9 +68,10 @@ describe('PostgreSQL Database Schema & Migration Verification', () => {
       'auth_action_tokens',
       'oauth_states',
       'auth_identities',
+      'user_market_alerts',
     ];
 
-    expect(expectedEntities.length).toBe(31);
+    expect(expectedEntities.length).toBe(32);
     for (const table of expectedEntities) {
       expect(tableNames, `Table ${table} should exist in database`).toContain(table);
     }

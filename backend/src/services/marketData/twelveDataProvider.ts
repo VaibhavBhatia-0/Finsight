@@ -34,21 +34,26 @@ export class TwelveDataMarketDataProvider {
 
     const price = number(value.close);
     const previousClose = number(value.previous_close);
+    const observedAt = timestamp(value.datetime);
     if (!Number.isFinite(price) || price <= 0) throw new AppError('Market-data provider returned an invalid quote', 503, 'MARKET_DATA_INVALID');
+    if (!observedAt) throw new AppError('Market-data provider returned an invalid quote timestamp', 503, 'MARKET_DATA_INVALID');
+    const hasPreviousClose = Number.isFinite(previousClose) && previousClose > 0;
+    const change = nullableNumber(value.change) ?? (hasPreviousClose ? price - previousClose : null);
+    const changePercent = nullableNumber(value.percent_change) ?? (hasPreviousClose ? (price - previousClose) / previousClose * 100 : null);
     return {
       symbol: value.symbol || symbol.toUpperCase(),
       providerSymbol: value.symbol || symbol.toUpperCase(), provider: 'TWELVE_DATA', exchange: exchange || 'UNKNOWN', currency: 'N/A',
       price,
-      change: finite(value.change, price - previousClose),
-      changePercent: finite(value.percent_change, previousClose > 0 ? (price - previousClose) / previousClose * 100 : 0),
-      open: finite(value.open, price),
-      high: finite(value.high, price),
-      low: finite(value.low, price),
-      previousClose: Number.isFinite(previousClose) && previousClose > 0 ? previousClose : price,
-      volume: Math.max(0, finite(value.volume, 0)),
+      change,
+      changePercent,
+      open: nullableNumber(value.open),
+      high: nullableNumber(value.high),
+      low: nullableNumber(value.low),
+      previousClose: hasPreviousClose ? previousClose : null,
+      volume: nullableNumber(value.volume),
       fiftyTwoWeekHigh: null, fiftyTwoWeekLow: null,
       freshness: 'DELAYED', freshnessLabel: 'DELAYED', marketStatus: 'UNKNOWN',
-      marketTimestamp: timestamp(value.datetime), timestamp: timestamp(value.datetime), fetchedAt: new Date().toISOString(), freshnessSeconds: 0,
+      marketTimestamp: observedAt, timestamp: observedAt, fetchedAt: new Date().toISOString(), freshnessSeconds: 0,
       isDelayed: true, isStale: false,
       source: 'TWELVE_DATA',
     };
@@ -56,5 +61,5 @@ export class TwelveDataMarketDataProvider {
 }
 
 function number(value?: string): number { return Number(value); }
-function finite(value: string | undefined, fallback: number): number { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
-function timestamp(value?: string): string { const parsed = value ? new Date(value) : new Date(); return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString(); }
+function nullableNumber(value?: string): number | null { const parsed = Number(value); return value !== undefined && Number.isFinite(parsed) ? parsed : null; }
+function timestamp(value?: string): string | null { if (!value) return null; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString(); }

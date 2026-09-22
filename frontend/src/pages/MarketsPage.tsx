@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { ArrowRight, ChevronDown, Plus, Search } from 'lucide-react';
+import { ArrowRight, ChevronDown, Plus, Search, Scale } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/client';
 import type { ApiId, MarketOverview, MarketStock, MarketStocksResponse } from '../api/contracts';
@@ -9,6 +9,7 @@ import FreshnessBadge from '../components/FreshnessBadge';
 import { IndexPerformanceChart, MarketMoversChart } from '../components/MarketInsightCharts';
 import StockAnalyticsPanel from '../components/StockAnalyticsPanel';
 import { Spinner } from '../components/Spinner';
+import StockSearchInput from '../components/StockSearchInput';
 import { useAuth } from '../hooks/useAuth';
 import { useWatchlist } from '../hooks/useWatchlist';
 
@@ -17,6 +18,7 @@ export default function MarketsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState(searchParams.get('q') ?? '');
+  const [securityJump, setSecurityJump] = useState('');
   const deferredSearch = useDeferredValue(search.trim());
   const [country, setCountry] = useState('');
   const [exchange, setExchange] = useState('');
@@ -62,10 +64,11 @@ export default function MarketsPage() {
     <main>
       <header className="page-heading">
         <div><p className="page-eyebrow">Invest</p><h1>Markets</h1><p className="page-subtitle">Search the official NSE and US listing universe. BSE symbols support provider quotes, while BSE directory coverage remains limited to verified stored listings. Quotes load only for the visible page.</p></div>
-        <Link to="/screener" className="btn-secondary inline-flex items-center gap-2 px-4 py-2 text-sm">Advanced screener <ArrowRight size={15} /></Link>
+        <div className="flex flex-wrap gap-2"><Link to="/markets/compare" className="btn-secondary inline-flex items-center gap-2 px-4 py-2 text-sm"><Scale size={15} /> Compare securities</Link><Link to="/screener" className="btn-secondary inline-flex items-center gap-2 px-4 py-2 text-sm">Advanced screener <ArrowRight size={15} /></Link></div>
       </header>
 
       <section className="panel mb-4">
+        <div className="mb-4 max-w-xl"><StockSearchInput label="Open a listed security" value={securityJump} onChange={setSecurityJump} onSelect={security => { if (security) navigate(`/markets/${encodeURIComponent(security.providerSymbol ?? security.provider_symbol ?? security.symbol)}`); }} /></div>
         <div className="market-search-row">
           <label className="market-search"><Search size={18} aria-hidden /><span className="sr-only">Search markets</span><input value={search} onChange={event => { const value = event.target.value; setSearch(value); resetPage(); setSearchParams(value ? { q: value } : {}, { replace: true }); }} placeholder="Ticker or company" /></label>
           <div className="market-display-controls"><label>Display prices<select value={displayCurrency} onChange={event => setDisplayCurrency(event.target.value)}><option value="NATIVE">Native currency</option><option value="INR">INR</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option></select></label><FreshnessBadge freshness={freshness} /></div>
@@ -111,7 +114,7 @@ function MarketRow({ stock, open, toggle, displayCurrency, rate, add, candidates
       <td><span className="flex items-center gap-3"><span className="symbol-token">{stock.symbol.slice(0, 2)}</span><span><strong className="block font-mono">{stock.display_symbol || stock.symbol}</strong><span className="text-xs text-gray-500">{stock.company_name}</span></span></span></td>
       <td>{stock.exchange_code} · {stock.country_code}</td><td>{stock.sector ?? 'N/A'}</td>
       <td className="text-right font-mono">{quote ? formatPrice(stock, displayCurrency, rate) : 'N/A'}</td>
-      <td className={`text-right font-mono ${quote && quote.changePercent >= 0 ? 'movement-up' : 'movement-down'}`}>{quote ? `${quote.changePercent >= 0 ? '+' : ''}${quote.changePercent.toFixed(2)}%` : 'N/A'}</td>
+      <td className={`text-right font-mono ${movementClass(quote?.changePercent)}`}>{formatChange(quote?.changePercent)}</td>
       <td className="text-center">{quote ? <FreshnessBadge freshness={quote.freshnessLabel} timestamp={quote.marketTimestamp} /> : <FreshnessBadge freshness="UNAVAILABLE" />}</td>
       <td className="text-center"><button className="icon-action" onClick={event => { event.stopPropagation(); add(); }} aria-label={`Add ${stock.symbol} to watchlist`}><Plus size={15} /></button></td>
     </tr>
@@ -120,11 +123,14 @@ function MarketRow({ stock, open, toggle, displayCurrency, rate, add, candidates
 }
 
 function aggregateFreshness(stocks: MarketStock[]) {
-  const values = stocks.flatMap(stock => stock.quote ? [stock.quote.freshnessLabel] : ['UNAVAILABLE' as const]);
-  return (['UNAVAILABLE', 'STALE', 'SYNTHETIC', 'LAST CLOSE', 'DELAYED', 'LIVE'] as const).find(value => values.includes(value)) || 'UNAVAILABLE';
+  const values = stocks.flatMap(stock => stock.quote ? [stock.quote.freshnessLabel] : []);
+  if (!values.length) return 'UNAVAILABLE';
+  return (['STALE', 'SYNTHETIC', 'LAST CLOSE', 'DELAYED', 'LIVE'] as const).find(value => values.includes(value)) || 'UNAVAILABLE';
 }
 function formatPrice(stock: MarketStock, displayCurrency: string, rate?: number) {
   const currency = displayCurrency === 'NATIVE' ? stock.currency : displayCurrency;
   if (!stock.quote || (displayCurrency !== 'NATIVE' && rate === undefined)) return 'N/A';
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(stock.quote.price * (rate ?? 1));
 }
+function movementClass(value: number | null | undefined) { return value == null ? '' : value >= 0 ? 'movement-up' : 'movement-down'; }
+function formatChange(value: number | null | undefined) { return value == null ? 'N/A' : `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`; }

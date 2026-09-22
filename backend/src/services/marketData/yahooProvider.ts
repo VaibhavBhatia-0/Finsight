@@ -154,13 +154,13 @@ function mapQuote(symbol: string, providerSymbol: string, result: YahooChartResu
   const providerDelaySeconds = Math.max(0, Math.round(firstFinite(meta.exchangeDataDelayedBy, defaultDelayMinutes(meta.exchangeName))! * 60));
   const freshnessSeconds = Math.max(0, Math.floor((fetchedAt.getTime() - marketTimestamp.getTime()) / 1000));
   const freshnessLabel = classifyFreshness(status, freshnessSeconds, providerDelaySeconds);
-  const change = finite(previousClose) && previousClose! > 0 ? price! - previousClose! : 0;
+  const change = finite(previousClose) && previousClose! > 0 ? price! - previousClose! : null;
   return {
     symbol: symbol.toUpperCase(), providerSymbol, provider: 'YAHOO_FINANCE_CHART',
     exchange: meta.fullExchangeName || meta.exchangeName || 'UNKNOWN', currency: meta.currency || 'N/A',
-    price: price!, change: round(change), changePercent: previousClose! > 0 ? round(change / previousClose! * 100) : 0,
+    price: price!, change: change === null ? null : round(change), changePercent: change === null ? null : round(change / previousClose! * 100),
     open: nullable(meta.regularMarketOpen), high: nullable(meta.regularMarketDayHigh), low: nullable(meta.regularMarketDayLow),
-    previousClose: nullable(previousClose), volume: nullable(meta.regularMarketVolume),
+    previousClose: finite(previousClose) && previousClose! > 0 ? previousClose! : null, volume: nullable(meta.regularMarketVolume),
     fiftyTwoWeekHigh: nullable(meta.fiftyTwoWeekHigh), fiftyTwoWeekLow: nullable(meta.fiftyTwoWeekLow),
     marketTimestamp: marketTimestamp.toISOString(), timestamp: marketTimestamp.toISOString(), fetchedAt: fetchedAt.toISOString(), freshnessSeconds,
     freshnessLabel, freshness: freshnessLabel, marketStatus: status,
