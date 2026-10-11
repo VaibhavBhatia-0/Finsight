@@ -56,6 +56,14 @@ export function errorHandler(
   }
 
   // Unhandled / Internal Server Error
-  console.error(JSON.stringify({ level: 'error', event: 'unhandled_error', method: req.method, path: req.path, message: err instanceof Error ? err.message : 'Unknown error', timestamp: new Date().toISOString() }));
+  // Do not write database, provider, or filesystem error details to production logs.
+  console.error(JSON.stringify({
+    level: 'error',
+    event: 'unhandled_error',
+    method: req.method,
+    path: req.path,
+    message: process.env.NODE_ENV === 'production' ? 'Unhandled application error' : (err instanceof Error ? err.message : 'Unknown error'),
+    timestamp: new Date().toISOString(),
+  }));
   sendError(res, 500, 'INTERNAL_SERVER_ERROR', 'An unexpected internal error occurred');
 }

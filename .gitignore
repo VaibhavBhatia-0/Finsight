@@ -1,6 +1,9 @@
 .env
 .pglite_data/
 .pglite_data*/
+.qa_runtime_pglite/
+.production_smoke_pglite/
+.docker_runtime_probe/
 node_modules/
 dist/
 coverage/

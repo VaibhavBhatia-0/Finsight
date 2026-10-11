@@ -12,7 +12,9 @@
     "test:db": "vitest run tests/database/migrations.test.ts",
     "test:finance": "vitest run tests/unit/finance.test.ts",
     "migrate": "ts-node src/database/migrate.ts",
+    "migrate:prod": "node dist/database/migrate.js",
     "seed": "ts-node src/database/seed.ts",
+    "seed:prod": "node dist/database/seed.js",
     "universe:sync": "ts-node src/database/syncSecurityUniverse.ts",
     "market:verify": "ts-node src/database/verifyMarketData.ts",
     "typecheck": "tsc --noEmit"

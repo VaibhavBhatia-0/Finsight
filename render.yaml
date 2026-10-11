@@ -1,0 +1,38 @@
+services:
+  - type: web
+    runtime: docker
+    name: finsight-api
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_DRIVER
+        value: pg
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: JWT_ISSUER
+        value: finsight-api
+      - key: JWT_AUDIENCE
+        value: finsight-web
+      - key: CORS_ORIGIN
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: RUN_SEEDS_ON_STARTUP
+        value: "false"
+      - key: MARKET_DATA_PROVIDER
+        value: yahoo
+      - key: FX_PROVIDER
+        value: yahoo
+      - key: PYTHON_PATH
+        value: /opt/venv/bin/python
+      - key: ANALYTICS_DIR
+        value: /app/analytics

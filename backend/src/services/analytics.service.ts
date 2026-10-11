@@ -4,7 +4,9 @@ import { AppError } from '../middleware/errorHandler';
 
 export class AnalyticsService {
   private static pythonPath = process.env.PYTHON_PATH || 'python';
-  private static analyticsBaseDir = path.resolve(__dirname, '../../../analytics');
+  private static analyticsBaseDir = process.env.ANALYTICS_DIR
+    ? path.resolve(process.env.ANALYTICS_DIR)
+    : path.resolve(__dirname, '../../../analytics');
 
   public static async runScript<TInput = any, TOutput = any>(
     subPath: string,
