@@ -9,6 +9,7 @@ import { AuthActionTokenRepository } from '../../src/repositories/authActionToke
 import { UserRepository } from '../../src/repositories/user.repository';
 import { db } from '../../src/database/db';
 import { EmailService } from '../../src/services/email.service';
+import { UserPreferencesRepository } from '../../src/repositories/userPreferences.repository';
 
 describe('Auth API Integration Tests (/api/v1/auth)', () => {
   let server: http.Server;
@@ -134,6 +135,63 @@ describe('Auth API Integration Tests (/api/v1/auth)', () => {
     expect(res.status).toBe(200);
     expect(data.success).toBe(true);
     expect(data.data.theme).toBe('dark');
+  });
+
+  it('6b. updates every supported preference field and persists the canonical values', async () => {
+    const benchmark = await db.query<{ id: string }>("SELECT id FROM benchmarks WHERE code = 'SP500' LIMIT 1");
+    const payload = {
+      theme: 'light',
+      default_currency: 'USD',
+      default_benchmark_id: benchmark.rows[0].id,
+      dashboard_layout: { sections: [{ id: 'summary', order: 0, visible: true }, { id: 'indices', order: 1, visible: false }] },
+      selected_market_indices: ['SP500', 'NASDAQ_COMP'],
+      watchlist_preferences: { sortBy: 'added_at', sortOrder: 'desc' },
+      tax_residency: 'US',
+      tax_status: 'resident',
+    };
+    const response = await fetch(`${baseUrl}/api/v1/auth/preferences`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data).toMatchObject(payload);
+    const profile = await (await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${authToken}` } })).json();
+    expect(profile.data.preferences).toMatchObject(payload);
+  });
+
+  it('6c. rejects malformed preferences without changing stored values', async () => {
+    const response = await fetch(`${baseUrl}/api/v1/auth/preferences`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ theme: 'neon', selected_market_indices: new Array(21).fill('SP500') }),
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe('VALIDATION_ERROR');
+    const profile = await (await fetch(`${baseUrl}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${authToken}` } })).json();
+    expect(profile.data.preferences).toMatchObject({ theme: 'light', selected_market_indices: ['SP500', 'NASDAQ_COMP'] });
+  });
+
+  it('6d. returns a generic request-correlated 500 when the preferences database operation fails', async () => {
+    const databaseError = Object.assign(new Error('column tax_residency does not exist; password=must-not-leak'), { code: '42703' });
+    const update = vi.spyOn(UserPreferencesRepository, 'update').mockRejectedValueOnce(databaseError);
+    const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/auth/preferences`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ theme: 'dark' }),
+      });
+      expect(response.status).toBe(500);
+      expect(response.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
+      expect(await response.json()).toMatchObject({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'An unexpected internal error occurred' } });
+      expect(JSON.stringify(diagnostic.mock.calls)).not.toContain('must-not-leak');
+    } finally {
+      update.mockRestore();
+      diagnostic.mockRestore();
+    }
   });
 
   it('7. GET /api/v1/auth/me without token returns 401', async () => {

@@ -117,7 +117,7 @@ export interface TechnicalPoint {
   bollingerUpper: number | null; bollingerMiddle: number | null; bollingerLower: number | null;
 }
 export interface TechnicalAnalysisResponse {
-  security: SecuritySearchItem; period: string; provider: string; fetchedAt: string; series: TechnicalPoint[];
+  security: SecuritySearchItem; period: string; provider: string; fetchedAt: string; isStale: boolean; series: TechnicalPoint[];
   summary: null | Omit<TechnicalPoint, 'date' | 'close' | 'volume' | 'bollingerUpper' | 'bollingerMiddle' | 'bollingerLower'> & { asOfDate: string; volatility: number | null; maxDrawdown: number | null };
   methodology: string;
 }
@@ -179,7 +179,7 @@ export interface StockFundamentals {
 }
 
 export interface MarketPriceBar { date: string; open: number; high: number; low: number; close: number; adjusted_close?: number; volume: number }
-export interface MarketHistory { symbol: string; provider: string; currency: string; exchange: string; interval: string; range: string; fetchedAt: string; adjusted: boolean; bars: MarketPriceBar[]; events: Array<{ type: 'DIVIDEND' | 'SPLIT'; date: string; amount: number | null; ratio: number | null; currency: string; source: string }> }
+export interface MarketHistory { symbol: string; provider: string; currency: string; exchange: string; interval: string; range: string; fetchedAt: string; isStale?: boolean; adjusted: boolean; bars: MarketPriceBar[]; events: Array<{ type: 'DIVIDEND' | 'SPLIT'; date: string; amount: number | null; ratio: number | null; currency: string; source: string }> }
 
 export interface Dividend {
   id: ApiId;

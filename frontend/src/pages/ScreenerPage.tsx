@@ -123,7 +123,7 @@ export const ScreenerPage: React.FC = () => {
   return (
     <main>
       <header className="page-heading"><div><p className="page-eyebrow">Invest</p><h1 className="flex items-center"><Search className="mr-3 text-gold-400" aria-hidden="true" /> Stock screener</h1><p className="page-subtitle">Server-side filtering, sorting, and pagination across sourced observations. Presets are editable filter configurations, not recommendations; unavailable metrics are excluded.</p></div>{displayedStocks.find(stock => stock.quote)?.quote && <FreshnessBadge freshness={displayedStocks.find(stock => stock.quote)!.quote!.freshnessLabel} timestamp={displayedStocks.find(stock => stock.quote)!.quote!.marketTimestamp} />}</header>
-      <section className="panel mb-4"><div className="max-w-xl"><StockSearchInput label="Open a specific listed security" value={securitySearch} onChange={setSecuritySearch} onSelect={security => { if (security) navigate(`/markets/${encodeURIComponent(security.providerSymbol ?? security.provider_symbol ?? security.symbol)}`); }} /></div><div className="mt-4 flex flex-wrap gap-2" aria-label="Screener presets">{presets.map(preset => <button key={preset.name} type="button" className="btn-secondary px-3 py-2 text-sm" title={preset.description} onClick={() => applyPreset(preset)}>{preset.name}</button>)}</div></section>
+      <section className="panel mb-4"><div className="max-w-xl"><StockSearchInput label="Open a specific listed security" value={securitySearch} onChange={setSecuritySearch} onSelect={security => { if (security) navigate(`/markets/${security.id}`); }} /></div><div className="mt-4 flex flex-wrap gap-2" aria-label="Screener presets">{presets.map(preset => <button key={preset.name} type="button" className="btn-secondary px-3 py-2 text-sm" title={preset.description} onClick={() => applyPreset(preset)}>{preset.name}</button>)}</div></section>
       <section
         className="panel screener-filter-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 p-4 border rounded"
         aria-label="Filter panel"
@@ -218,7 +218,7 @@ export const ScreenerPage: React.FC = () => {
             </thead>
             <tbody>
               {displayedStocks.map(stock => (
-                <tr key={stock.symbol} className="border-t dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer" onClick={() => navigate(`/markets/${stock.symbol}`)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") navigate(`/markets/${stock.symbol}`); }}>
+                <tr key={stock.id} className="border-t dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer" onClick={() => navigate(`/markets/${stock.id}`)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") navigate(`/markets/${stock.id}`); }}>
                   <td className="px-4 py-2 font-mono">{stock.symbol}</td>
                   <td className="px-4 py-2">{stock.name}</td>
                   <td className="px-4 py-2">{optionalNumber(stock.price)}</td>

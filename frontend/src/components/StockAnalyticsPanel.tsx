@@ -45,6 +45,8 @@ export default function StockAnalyticsPanel({ stock, comparisonCandidates = [] }
       <label className="comparison-select">Compare<select value={comparisonId} onChange={event => setComparisonId(event.target.value)}><option value="">None</option>{comparisonCandidates.filter(item => item.id !== stock.id && item.quote).map(item => <option key={item.id} value={String(item.id)}>{item.symbol}</option>)}</select></label>
     </div>
     {technicals.isPending ? <Spinner /> : technicals.error ? <p role="alert" className="error-banner">Historical market data is unavailable.</p> : technicals.data ? <>
+      {technicals.data.isStale && <p role="status" className="error-banner">This chart uses cached historical data. Retrieved {new Date(technicals.data.fetchedAt).toLocaleString()}.</p>}
+      {comparisonHistory.data?.isStale && <p role="status" className="error-banner">The comparison series uses cached historical data.</p>}
       <ReactECharts option={option} notMerge lazyUpdate style={{ height: overlays.has('RSI') || overlays.has('MACD') ? 520 : 390 }} />
       <dl className="technical-summary"><Fact label="RSI 14" value={metric(technicals.data.summary?.rsi14)} /><Fact label="Annualized volatility" value={percent(technicals.data.summary?.volatility)} /><Fact label="Maximum drawdown" value={percent(technicals.data.summary?.maxDrawdown)} /><Fact label="As of" value={technicals.data.summary?.asOfDate ?? 'N/A'} /></dl>
       <p className="chart-provenance">{technicals.data.provider} · adjusted close · retrieved {new Date(technicals.data.fetchedAt).toLocaleString()}. {technicals.data.methodology}</p>

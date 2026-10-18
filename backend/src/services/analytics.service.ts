@@ -21,6 +21,7 @@ export class AnalyticsService {
       let stderrData = '';
       let settled = false;
       const maxOutputBytes = 5 * 1024 * 1024;
+      const maxDiagnosticBytes = 64 * 1024;
       const timeout = setTimeout(() => {
         if (settled) return;
         settled = true;
@@ -39,14 +40,15 @@ export class AnalyticsService {
       });
 
       child.stderr.on('data', (chunk) => {
-        stderrData += chunk.toString();
+        if (stderrData.length < maxDiagnosticBytes) stderrData += chunk.toString().slice(0, maxDiagnosticBytes - stderrData.length);
       });
 
       child.on('error', (err) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
-        reject(new AppError(`Failed to spawn Python process: ${err.message}`, 500, 'ANALYTICS_SPAWN_ERROR'));
+        console.error(JSON.stringify({ level: 'error', event: 'analytics_spawn_error', script: subPath, errorName: err.name, message: safeDiagnostic(err.message), timestamp: new Date().toISOString() }));
+        reject(new AppError('Analytics service is unavailable', 503, 'ANALYTICS_SPAWN_ERROR'));
       });
 
       child.on('close', (code) => {
@@ -54,7 +56,7 @@ export class AnalyticsService {
         settled = true;
         clearTimeout(timeout);
         if (code !== 0) {
-          console.error(`[Python Analytics Error in ${subPath}] Code ${code}: ${stderrData}`);
+          console.error(JSON.stringify({ level: 'error', event: 'analytics_execution_error', script: subPath, exitCode: code, diagnostic: safeDiagnostic(stderrData), timestamp: new Date().toISOString() }));
           reject(new AppError('Analytics calculation failed', 422, 'ANALYTICS_EXECUTION_ERROR'));
           return;
         }
@@ -62,9 +64,9 @@ export class AnalyticsService {
         try {
           const parsed = JSON.parse(stdoutData.trim());
           resolve(parsed as TOutput);
-        } catch (e: any) {
-          console.error(`[Python Analytics JSON Parse Error] Raw output: ${stdoutData}`);
-          reject(new AppError(`Invalid JSON returned from Python analytics: ${e.message}`, 500, 'ANALYTICS_PARSE_ERROR'));
+        } catch (error) {
+          console.error(JSON.stringify({ level: 'error', event: 'analytics_parse_error', script: subPath, errorName: error instanceof Error ? error.name : 'Error', message: safeDiagnostic(error instanceof Error ? error.message : 'Invalid JSON'), outputBytes: stdoutData.length, timestamp: new Date().toISOString() }));
+          reject(new AppError('Analytics service returned invalid output', 502, 'ANALYTICS_PARSE_ERROR'));
         }
       });
 
@@ -73,4 +75,11 @@ export class AnalyticsService {
       child.stdin.end();
     });
   }
+}
+
+function safeDiagnostic(value: string): string {
+  return value
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [REDACTED]')
+    .replace(/\b(password|token|secret|authorization|cookie)\s*[=:]\s*[^\s,;]+/gi, '$1=[REDACTED]')
+    .slice(0, 2000);
 }

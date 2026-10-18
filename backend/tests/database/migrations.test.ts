@@ -226,6 +226,20 @@ describe('PostgreSQL Database Schema & Migration Verification', () => {
     expect(symbols).toContain('NVDA');
   });
 
+  it('8b. bootstraps an idempotent non-synthetic market reference catalogue through migrations', async () => {
+    const before = await pg.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM stocks');
+    expect(Number(before.rows[0].count)).toBeGreaterThanOrEqual(8);
+
+    const migrationPath = path.resolve(__dirname, '../../../database/migrations/015_market_reference_bootstrap.sql');
+    const sql = fs.readFileSync(migrationPath, 'utf-8');
+    await expect(pg.exec(sql)).resolves.toBeDefined();
+
+    const after = await pg.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM stocks');
+    expect(after.rows[0].count).toBe(before.rows[0].count);
+    const observations = await pg.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM price_history');
+    expect(observations.rows[0].count).toBe('0');
+  });
+
   it('9. Applies portfolio-intelligence schema additions and accepts first-class TAX ledger entries', async () => {
     const portfolioColumns = await pg.query<{ column_name: string; data_type: string }>(`
       SELECT column_name, data_type

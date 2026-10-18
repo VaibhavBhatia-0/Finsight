@@ -132,7 +132,7 @@ export class MarketDataService {
     if (!stock || !stock.is_active) throw new AppError('Security not found', 404, 'SECURITY_NOT_FOUND');
     const config = TECHNICAL_PERIODS[period];
     const history = await this.getChart(stock.symbol, stock.exchange_code, config.range, config.interval);
-    return { security: securityIdentity(stock), period, provider: history.provider, fetchedAt: history.fetchedAt, ...calculateTechnicalAnalysis(history.bars) };
+    return { security: securityIdentity(stock), period, provider: history.provider, fetchedAt: history.fetchedAt, isStale: history.isStale ?? false, ...calculateTechnicalAnalysis(history.bars) };
   }
 
   static async compareSecurities(securityIds: Array<string | number>) {
@@ -177,13 +177,17 @@ export class MarketDataService {
   }
 
   static async getMarketOverview() {
-    const settled = await Promise.allSettled(INDEX_UNIVERSE.map(async index => {
-      const quote = this.useTestFixtures()
-        ? MockMarketDataProvider.getQuote(index.code)
-        : await YahooFinanceMarketDataProvider.getQuote(index.providerSymbol, index.exchange);
-      return { ...index, ...quote };
-    }));
-    const indices = settled.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
+    const indices: Array<StockQuote & { code: string; name: string; country: string }> = [];
+    for (let offset = 0; offset < INDEX_UNIVERSE.length; offset += 2) {
+      const batch = INDEX_UNIVERSE.slice(offset, offset + 2);
+      const settled = await Promise.allSettled(batch.map(async index => {
+        const quote = this.useTestFixtures()
+          ? MockMarketDataProvider.getQuote(index.code)
+          : await YahooFinanceMarketDataProvider.getQuote(index.providerSymbol, index.exchange);
+        return { ...index, ...quote };
+      }));
+      indices.push(...settled.flatMap(result => result.status === 'fulfilled' ? [result.value] : []));
+    }
     if (!indices.length) throw new AppError('Market overview is unavailable', 503, 'MARKET_DATA_UNAVAILABLE');
     return { indices, india: indices.filter(item => item.country === 'IN'), us: indices.filter(item => item.country === 'US') };
   }

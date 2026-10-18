@@ -56,14 +56,36 @@ export function errorHandler(
   }
 
   // Unhandled / Internal Server Error
-  // Do not write database, provider, or filesystem error details to production logs.
+  const diagnostic = safeDiagnostic(err);
   console.error(JSON.stringify({
     level: 'error',
     event: 'unhandled_error',
+    requestId: res.locals.requestId || res.getHeader('X-Request-ID') || null,
     method: req.method,
     path: req.path,
-    message: process.env.NODE_ENV === 'production' ? 'Unhandled application error' : (err instanceof Error ? err.message : 'Unknown error'),
+    statusCode: 500,
+    errorName: diagnostic.name,
+    errorCode: diagnostic.code,
+    message: diagnostic.message,
+    stack: diagnostic.stack,
     timestamp: new Date().toISOString(),
   }));
   sendError(res, 500, 'INTERNAL_SERVER_ERROR', 'An unexpected internal error occurred');
+}
+
+function safeDiagnostic(error: unknown): { name: string; code: string | null; message: string; stack: string | null } {
+  const candidate = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const name = typeof candidate.name === 'string' ? clean(candidate.name, 100) : 'Error';
+  const code = typeof candidate.code === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(candidate.code) ? candidate.code : null;
+  const message = clean(error instanceof Error ? error.message : String(error || 'Unknown error'), 1000);
+  const stack = error instanceof Error && error.stack ? clean(error.stack, 5000) : null;
+  return { name, code, message, stack };
+}
+
+function clean(value: string, limit: number): string {
+  return value
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [REDACTED]')
+    .replace(/\b(postgres(?:ql)?):\/\/[^\s/@:]+:[^\s/@]+@/gi, '$1://[REDACTED]@')
+    .replace(/\b(password|token|secret|authorization|cookie)\s*[=:]\s*[^\s,;]+/gi, '$1=[REDACTED]')
+    .slice(0, limit);
 }

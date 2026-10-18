@@ -57,6 +57,8 @@ export interface MarketHistory {
   interval: string;
   range: string;
   fetchedAt: string;
+  /** True only when an expired provider-sourced cache entry is served after a refresh failure. */
+  isStale?: boolean;
   adjusted: boolean;
   bars: PriceBar[];
   events: Array<{

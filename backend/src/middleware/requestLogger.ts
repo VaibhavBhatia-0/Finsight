@@ -4,6 +4,7 @@ import { NextFunction, Request, Response } from 'express';
 export function requestLogger(req: Request, res: Response, next: NextFunction) {
   const started = process.hrtime.bigint();
   const requestId = crypto.randomUUID();
+  res.locals.requestId = requestId;
   res.setHeader('X-Request-ID', requestId);
   res.on('finish', () => {
     const durationMs = Number(process.hrtime.bigint() - started) / 1_000_000;

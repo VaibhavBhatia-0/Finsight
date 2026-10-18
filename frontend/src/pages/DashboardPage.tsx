@@ -23,7 +23,7 @@ export default function DashboardPage() {
   const focusPortfolio = portfolios.data?.[0];
   const portfolioTransactions = usePortfolioTransactions(focusPortfolio?.portfolio.id);
 
-  if ([portfolios, watchlists, markets, finance, insights].some(query => query.isPending) || (focusPortfolio && portfolioTransactions.isPending)) return <Spinner />;
+  if ([portfolios, watchlists, finance, insights].some(query => query.isPending) || (focusPortfolio && portfolioTransactions.isPending)) return <Spinner />;
 
   const currencies = new Set(portfolios.data?.map(item => item.portfolio.baseCurrency));
   const combinedValue = currencies.size <= 1 ? portfolios.data?.reduce((sum, item) => sum + item.summary.totalValue, 0) ?? 0 : null;
@@ -73,7 +73,7 @@ export default function DashboardPage() {
     ),
     indices: (
       <Panel title="Market pulse" subtitle="Timestamped provider feed" action={<Link to="/markets">View markets <ArrowUpRight size={13} /></Link>}>
-        {markets.error ? <p className="error-banner" role="alert">Market data is temporarily unavailable; the rest of your dashboard remains usable.</p> : <div className="data-list">
+        {markets.isPending ? <Spinner /> : markets.error ? <p className="error-banner" role="alert">Market data is temporarily unavailable; the rest of your dashboard remains usable.</p> : <div className="data-list">
           {markets.data?.indices.filter(index => preferences.selectedMarketIndices.includes(index.code)).map(index => (
             <div className="data-row" key={index.code}>
               <div><strong>{index.name}</strong><p>{index.country} · {index.currency}</p></div>
@@ -86,7 +86,7 @@ export default function DashboardPage() {
     watchlist: (
       <Panel title="Watchlist" subtitle={`${allWatchItems.length} tracked assets`} action={<Link to="/watchlist">Open list <ArrowUpRight size={13} /></Link>}>
         {watchlists.error ? <p className="error-banner" role="alert">Watchlist data is temporarily unavailable.</p> : allWatchItems.length ? <div className="data-list">{allWatchItems.slice(0, 5).map(item => (
-          <Link to={`/markets/${item.symbol}`} className="data-row" key={`${item.watchlist_id}-${item.stock_id}`}>
+          <Link to={`/markets/${item.stock_id}`} className="data-row" key={`${item.watchlist_id}-${item.stock_id}`}>
             <div className="flex items-center gap-3"><span className="symbol-token">{item.symbol.slice(0, 2)}</span><div><strong>{item.symbol}</strong><p>{item.company_name}</p></div></div>
             <div className="text-right">{item.quote ? <><strong className="font-mono">{item.currency} {item.quote.price.toFixed(2)}</strong><p className={movementClass(item.quote.changePercent)}>{formatChange(item.quote.changePercent)}</p></> : <><strong>N/A</strong><p>Unavailable</p></>}</div>
           </Link>

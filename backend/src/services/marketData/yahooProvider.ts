@@ -44,6 +44,12 @@ const pending = new Map<string, Promise<unknown>>();
 const QUOTE_TTL_MS = 30_000;
 const INTRADAY_TTL_MS = 60_000;
 const HISTORICAL_TTL_MS = 6 * 60 * 60 * 1000;
+const PROVIDER_CONCURRENCY = 2;
+const RATE_LIMIT_COOLDOWN_MS = 30_000;
+const MAX_RETRY_AFTER_MS = 5_000;
+let activeRequests = 0;
+let providerCooldownUntil = 0;
+const providerWaiters: Array<() => void> = [];
 
 let health: ProviderHealth = {
   provider: 'YAHOO_FINANCE_CHART', status: 'unavailable', lastSuccessfulRequest: null,
@@ -53,9 +59,12 @@ let health: ProviderHealth = {
 export class YahooFinanceMarketDataProvider {
   static providerSymbol(symbol: string, exchange?: string): string {
     const normalized = symbol.trim().toUpperCase();
-    if (normalized.startsWith('^') || normalized.includes('.') || normalized.includes('=')) return normalized;
-    if (exchange?.toUpperCase() === 'NSE') return `${normalized}.NS`;
-    if (exchange?.toUpperCase() === 'BSE') return `${normalized}.BO`;
+    const market = exchange?.toUpperCase();
+    if (normalized.startsWith('^') || normalized.includes('=')) return normalized;
+    if (market === 'NSE') return normalized.endsWith('.NS') ? normalized : `${normalized}.NS`;
+    if (market === 'BSE') return normalized.endsWith('.BO') ? normalized : `${normalized}.BO`;
+    if (market === 'NASDAQ' || market === 'NYSE') return normalized.replace(/\./g, '-');
+    if (normalized.includes('.')) return normalized;
     return normalized;
   }
 
@@ -68,7 +77,7 @@ export class YahooFinanceMarketDataProvider {
     try {
       return await deduplicate(key, async () => {
         const started = Date.now();
-        const result = await requestChart(providerSymbol, { range: '5d', interval: '5m' });
+        const result = await requestChart(providerSymbol, { range: '5d', interval: '5m' }, !cached);
         const fetchedAt = new Date();
         const quote = mapQuote(symbol, providerSymbol, result, fetchedAt);
         quoteCache.set(key, { value: quote, expiresAt: fetchedAt.getTime() + QUOTE_TTL_MS });
@@ -95,13 +104,18 @@ export class YahooFinanceMarketDataProvider {
     const key = `history:${providerSymbol}:${range}:${interval}`;
     const cached = historyCache.get(key);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
-    return deduplicate(key, async () => {
-      const result = await requestChart(providerSymbol, { range, interval, events: 'div,splits' });
-      const value = mapHistory(providerSymbol, range, interval, result);
-      const ttl = interval.endsWith('m') || interval.endsWith('h') ? INTRADAY_TTL_MS : HISTORICAL_TTL_MS;
-      historyCache.set(key, { value, expiresAt: Date.now() + ttl });
-      return value;
-    });
+    try {
+      return await deduplicate(key, async () => {
+        const result = await requestChart(providerSymbol, { range, interval, events: 'div,splits' }, !cached);
+        const value = mapHistory(providerSymbol, range, interval, result);
+        const ttl = interval.endsWith('m') || interval.endsWith('h') ? INTRADAY_TTL_MS : HISTORICAL_TTL_MS;
+        historyCache.set(key, { value, expiresAt: Date.now() + ttl });
+        return value;
+      });
+    } catch (error) {
+      if (cached) return { ...cached.value, isStale: true };
+      throw providerError(error);
+    }
   }
 
   static async getHistoryBetween(symbol: string, exchange: string | undefined, startDate: string, endDate: string): Promise<MarketHistory> {
@@ -112,25 +126,27 @@ export class YahooFinanceMarketDataProvider {
     const key = `history:${providerSymbol}:${start}:${end}:1d`;
     const cached = historyCache.get(key);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
-    return deduplicate(key, async () => {
-      const result = await requestChart(providerSymbol, { period1: String(start), period2: String(end), interval: '1d', events: 'div,splits' });
-      const value = mapHistory(providerSymbol, `${startDate}:${endDate}`, '1d', result);
-      historyCache.set(key, { value, expiresAt: Date.now() + HISTORICAL_TTL_MS });
-      return value;
-    });
+    try {
+      return await deduplicate(key, async () => {
+        const result = await requestChart(providerSymbol, { period1: String(start), period2: String(end), interval: '1d', events: 'div,splits' }, !cached);
+        const value = mapHistory(providerSymbol, `${startDate}:${endDate}`, '1d', result);
+        historyCache.set(key, { value, expiresAt: Date.now() + HISTORICAL_TTL_MS });
+        return value;
+      });
+    } catch (error) {
+      if (cached) return { ...cached.value, isStale: true };
+      throw providerError(error);
+    }
   }
 
   static getHealth(): ProviderHealth { return { ...health }; }
 }
 
-async function requestChart(symbol: string, params: Record<string, string>): Promise<YahooChartResult> {
+async function requestChart(symbol: string, params: Record<string, string>, retry = true): Promise<YahooChartResult> {
   const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`);
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
   url.searchParams.set('includePrePost', 'false');
-  const response = await fetch(url, {
-    headers: { Accept: 'application/json', 'User-Agent': 'FinSight/1.0 personal-research-workspace' },
-    signal: AbortSignal.timeout(10_000),
-  });
+  const response = await withProviderSlot(() => fetchWithRetry(url, retry));
   if (!response.ok) throw new AppError(`Market provider returned HTTP ${response.status}`, 503, 'MARKET_DATA_UNAVAILABLE');
   const payload = await response.json() as YahooChartResponse;
   const providerFailure = payload.chart?.error;
@@ -193,7 +209,7 @@ function mapHistory(providerSymbol: string, range: string, interval: string, res
   return {
     symbol: providerSymbol, provider: 'YAHOO_FINANCE_CHART', currency: result.meta.currency || 'N/A',
     exchange: result.meta.fullExchangeName || result.meta.exchangeName || 'UNKNOWN', interval, range,
-    fetchedAt: new Date().toISOString(), adjusted: true, bars,
+    fetchedAt: new Date().toISOString(), isStale: false, adjusted: true, bars,
     events: mapEvents(result),
   };
 }
@@ -242,9 +258,69 @@ function defaultDelayMinutes(exchange?: string): number {
 }
 
 function staleQuote(value: StockQuote): StockQuote {
-  const fetchedAt = new Date().toISOString();
-  return { ...value, fetchedAt, freshnessSeconds: Math.max(0, Math.floor((Date.now() - new Date(value.marketTimestamp).getTime()) / 1000)), freshness: 'STALE', freshnessLabel: 'STALE', isStale: true };
+  return { ...value, freshnessSeconds: Math.max(0, Math.floor((Date.now() - new Date(value.marketTimestamp).getTime()) / 1000)), freshness: 'STALE', freshnessLabel: 'STALE', isStale: true };
 }
+
+async function fetchWithRetry(url: URL, retry: boolean): Promise<Response> {
+  const attempts = retry ? 2 : 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (providerCooldownUntil > Date.now()) {
+      throw new AppError('Market provider is temporarily rate limited', 503, 'MARKET_DATA_UNAVAILABLE');
+    }
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json', 'User-Agent': 'FinSight/1.0 personal-research-workspace' },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (response.ok) return response;
+      const retryAfterMs = parseRetryAfter(response.headers.get('Retry-After'));
+      if (response.status === 429) {
+        providerCooldownUntil = Date.now() + (retryAfterMs ?? RATE_LIMIT_COOLDOWN_MS);
+        if (attempt + 1 < attempts && retryAfterMs !== null && retryAfterMs <= MAX_RETRY_AFTER_MS) {
+          await delay(retryAfterMs);
+          continue;
+        }
+        throw new AppError('Market provider returned HTTP 429', 503, 'MARKET_DATA_UNAVAILABLE');
+      }
+      if (response.status >= 500 && attempt + 1 < attempts) {
+        await delay(backoff(attempt));
+        continue;
+      }
+      throw new AppError(`Market provider returned HTTP ${response.status}`, 503, 'MARKET_DATA_UNAVAILABLE');
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      if (attempt + 1 < attempts) {
+        await delay(backoff(attempt));
+        continue;
+      }
+      throw new AppError(error instanceof Error && error.name === 'TimeoutError'
+        ? 'Market provider request timed out'
+        : 'Market provider request failed', 503, 'MARKET_DATA_UNAVAILABLE');
+    }
+  }
+  throw new AppError('Market provider request failed', 503, 'MARKET_DATA_UNAVAILABLE');
+}
+
+async function withProviderSlot<T>(operation: () => Promise<T>): Promise<T> {
+  if (activeRequests >= PROVIDER_CONCURRENCY) await new Promise<void>(resolve => providerWaiters.push(resolve));
+  activeRequests += 1;
+  try { return await operation(); }
+  finally {
+    activeRequests -= 1;
+    providerWaiters.shift()?.();
+  }
+}
+
+function parseRetryAfter(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1000);
+  const date = Date.parse(value);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : null;
+}
+
+function backoff(attempt: number): number { return Math.min(250 * 2 ** attempt + Math.floor(Math.random() * 100), 1_000); }
+function delay(milliseconds: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, milliseconds)); }
 
 async function deduplicate<T>(key: string, operation: () => Promise<T>): Promise<T> {
   const existing = pending.get(key) as Promise<T> | undefined;

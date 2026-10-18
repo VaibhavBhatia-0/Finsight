@@ -5,6 +5,7 @@ import { StockRepository } from '../repositories/stock.repository';
 import { sendSuccess, sendError } from '../utils/response';
 import type { ScreenerFilters } from '../validators/market.validator';
 import type { MarketFreshness } from '../services/marketData/types';
+import { AppError } from '../middleware/errorHandler';
 
 const PERIODS: Record<string, { range: string; interval: string }> = {
   '1D': { range: '1d', interval: '5m' },
@@ -40,6 +41,9 @@ export class MarketController {
         q: query.q, exchange: query.exchange, country: query.country, sector: query.sector,
         page: Number(query.page), limit: Number(query.limit), sortBy: query.sortBy as 'symbol' | 'company', sortOrder: query.sortOrder as 'asc' | 'desc',
       });
+      if (!list.total && !query.q && !query.exchange && !query.country && !query.sector) {
+        throw new AppError('The security reference universe is unavailable', 503, 'MARKET_UNIVERSE_UNAVAILABLE');
+      }
       const settled = await Promise.allSettled(list.items.map(async stock => ({
         ...stock,
         quote: await MarketDataService.getQuote(stock.symbol, (stock as any).exchange_code),
@@ -78,7 +82,10 @@ export class MarketController {
   }
 
   static async getTechnicals(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try { sendSuccess(res, await MarketDataService.getTechnicalAnalysis(req.params.id, String(req.query.period || '1Y') as any), 200, 'Historical'); }
+    try {
+      const analysis = await MarketDataService.getTechnicalAnalysis(req.params.id, String(req.query.period || '1Y') as any);
+      sendSuccess(res, analysis, 200, analysis.isStale ? 'STALE' : 'Historical', { source: analysis.provider, fetchedAt: analysis.fetchedAt, degraded: analysis.isStale });
+    }
     catch (error) { next(error); }
   }
 
@@ -125,7 +132,7 @@ export class MarketController {
         const config = PERIODS[period];
         if (!config) { sendError(res, 400, 'INVALID_PERIOD', 'Period must be one of 1D, 5D, 1M, 6M, YTD, 1Y, 5Y, MAX'); return; }
         const history = await MarketDataService.getChart(stock.symbol, stock.exchange_code, config.range, config.interval);
-        sendSuccess(res, history, 200, 'Historical', { source: history.provider, fetchedAt: history.fetchedAt });
+        sendSuccess(res, history, 200, history.isStale ? 'STALE' : 'Historical', { source: history.provider, fetchedAt: history.fetchedAt, degraded: history.isStale });
         return;
       }
       const prices = await MarketDataService.getPriceHistory(stock.id, stock.symbol, req.query.startDate as string, req.query.endDate as string, stock.exchange_code);

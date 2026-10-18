@@ -13,7 +13,8 @@
     "dev:frontend": "node scripts/dev.mjs",
     "dev:web": "npm run dev:web --workspace=frontend",
     "dev:all": "node scripts/dev.mjs",
-    "universe:sync": "npm run migrate --workspace=backend && npm run seed --workspace=backend && npm run universe:sync --workspace=backend",
+    "universe:sync": "npm run universe:sync --workspace=backend -- --dry-run",
+    "universe:sync:prod": "node backend/dist/database/syncSecurityUniverse.js",
     "market:verify": "npm run market:verify --workspace=backend",
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
@@ -22,10 +23,14 @@
     "typecheck": "npm run typecheck --workspaces",
     "lint": "npm run lint --workspaces",
     "test:ci": "npm run typecheck && npm run test --workspace=backend && npm run test:ci --workspace=frontend && npm run test:python",
-    "test:python": "python -m unittest discover -s analytics/tests -v"
+    "test:python": "python -m unittest discover -s analytics/tests -v",
+    "test:load:local": "node scripts/local-load-test.mjs"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "overrides": {
+    "proxy-addr": "2.0.8"
   },
   "engines": {
     "node": ">=20.0.0"

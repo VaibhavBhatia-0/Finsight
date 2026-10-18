@@ -36,7 +36,7 @@ export default function MarketsPage() {
     queryFn: async () => (await api.get<MarketStocksResponse>(endpoints.markets.stocks, { params: { q: deferredSearch || undefined, country: country || undefined, exchange: exchange || undefined, sector: sector || undefined, page, limit: pageSize, sortBy: sortBy === 'company' ? 'company' : 'symbol' } })).data,
     staleTime: 30_000,
   });
-  const overview = useQuery({ queryKey: ['markets-overview'], queryFn: async () => (await api.get<MarketOverview>(endpoints.markets.overview)).data, staleTime: 30_000, refetchInterval: 60_000 });
+  const overview = useQuery({ queryKey: ['markets-overview'], queryFn: async () => (await api.get<MarketOverview>(endpoints.markets.overview)).data, staleTime: 30_000, refetchInterval: query => query.state.status === 'error' ? false : 60_000 });
   const items = useMemo(() => {
     const rows = [...(stocks.data?.items ?? [])];
     if (sortBy === 'price') rows.sort((left, right) => (right.quote?.price ?? -Infinity) - (left.quote?.price ?? -Infinity));
@@ -68,7 +68,7 @@ export default function MarketsPage() {
       </header>
 
       <section className="panel mb-4">
-        <div className="mb-4 max-w-xl"><StockSearchInput label="Open a listed security" value={securityJump} onChange={setSecurityJump} onSelect={security => { if (security) navigate(`/markets/${encodeURIComponent(security.providerSymbol ?? security.provider_symbol ?? security.symbol)}`); }} /></div>
+        <div className="mb-4 max-w-xl"><StockSearchInput label="Open a listed security" value={securityJump} onChange={setSecurityJump} onSelect={security => { if (security) navigate(`/markets/${security.id}`); }} /></div>
         <div className="market-search-row">
           <label className="market-search"><Search size={18} aria-hidden /><span className="sr-only">Search markets</span><input value={search} onChange={event => { const value = event.target.value; setSearch(value); resetPage(); setSearchParams(value ? { q: value } : {}, { replace: true }); }} placeholder="Ticker or company" /></label>
           <div className="market-display-controls"><label>Display prices<select value={displayCurrency} onChange={event => setDisplayCurrency(event.target.value)}><option value="NATIVE">Native currency</option><option value="INR">INR</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option></select></label><FreshnessBadge freshness={freshness} /></div>
@@ -83,12 +83,12 @@ export default function MarketsPage() {
       </section>
 
       <div className="market-analytics-grid mb-4">
-        <section className="panel"><div className="panel-header"><div><h2 className="panel-title">Market pulse</h2><p className="panel-subtitle">Provider-timestamped benchmark session change</p></div>{overview.data?.indices[0] && <FreshnessBadge freshness={overview.data.indices[0].freshnessLabel} timestamp={overview.data.indices[0].marketTimestamp} />}</div>{overview.isPending ? <Spinner /> : overview.error ? <p role="alert" className="error-banner">Market pulse is currently unavailable.</p> : overview.data ? <IndexPerformanceChart indices={overview.data.indices} /> : null}</section>
+        <section className="panel"><div className="panel-header"><div><h2 className="panel-title">Market pulse</h2><p className="panel-subtitle">Provider-timestamped benchmark session change</p></div>{overview.data?.indices[0] && <FreshnessBadge freshness={overview.data.indices[0].freshnessLabel} timestamp={overview.data.indices[0].marketTimestamp} />}</div>{overview.isPending ? <Spinner /> : overview.error ? <div role="alert" className="error-banner">Market pulse is currently unavailable. <button type="button" className="underline" onClick={() => { void overview.refetch(); }}>Retry</button></div> : overview.data ? <IndexPerformanceChart indices={overview.data.indices} /> : null}</section>
         <section className="panel"><div className="panel-header"><div><h2 className="panel-title">Visible movers</h2><p className="panel-subtitle">Largest changes among this page’s quoted securities</p></div></div>{stocks.isPending ? <Spinner /> : stocks.error ? <p role="alert" className="error-banner">Market quotes are currently unavailable.</p> : <MarketMoversChart stocks={items} />}</section>
       </div>
 
       {stocks.isPending && <Spinner />}
-      {stocks.error && <p role="alert" className="error-banner">Unable to load the security universe.</p>}
+      {stocks.error && <div role="alert" className="error-banner">Unable to load the security universe. <button type="button" className="underline" onClick={() => { void stocks.refetch(); }}>Retry</button></div>}
       {watchlist.addError && <p role="alert" className="error-banner">{watchlist.addError.message}</p>}
       {stocks.data && (
         <section className="panel">
@@ -118,7 +118,7 @@ function MarketRow({ stock, open, toggle, displayCurrency, rate, add, candidates
       <td className="text-center">{quote ? <FreshnessBadge freshness={quote.freshnessLabel} timestamp={quote.marketTimestamp} /> : <FreshnessBadge freshness="UNAVAILABLE" />}</td>
       <td className="text-center"><button className="icon-action" onClick={event => { event.stopPropagation(); add(); }} aria-label={`Add ${stock.symbol} to watchlist`}><Plus size={15} /></button></td>
     </tr>
-    {open && <tr className="market-expanded-row"><td colSpan={8}><StockAnalyticsPanel stock={stock} comparisonCandidates={candidates} /><Link className="stock-detail-link" to={`/markets/${encodeURIComponent(stock.symbol)}`}>Open full company view <ArrowRight size={14} /></Link></td></tr>}
+    {open && <tr className="market-expanded-row"><td colSpan={8}><StockAnalyticsPanel stock={stock} comparisonCandidates={candidates} /><Link className="stock-detail-link" to={`/markets/${stock.id}`}>Open full company view <ArrowRight size={14} /></Link></td></tr>}
   </>;
 }
 
