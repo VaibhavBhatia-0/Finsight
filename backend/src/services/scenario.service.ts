@@ -97,11 +97,10 @@ export class ScenarioService {
       ].filter(row => row.ex_date > input.startDate && row.ex_date <= input.endDate),
       row => `${row.ex_date}:${Number(row.amount).toFixed(8)}`,
     );
+    // Provider closes and dividend amounts are already split-adjusted (e.g. Yahoo restates
+    // pre-split prices), so provider split events must not be applied to share counts again.
     const corporateActions = dedupeBy(
-      [
-        ...storedActions,
-        ...providerEvents.filter(event => event.type === 'SPLIT').map(event => ({ action_date: event.date, action_type: 'SPLIT', ratio: event.ratio, source: event.source })),
-      ].filter(row => row.action_date > input.startDate && row.action_date <= input.endDate),
+      storedActions.filter(row => row.action_date > input.startDate && row.action_date <= input.endDate),
       row => `${row.action_date}:${row.action_type}:${Number(row.ratio).toFixed(8)}`,
     );
     const fxDates = new Set<string>([input.startDate, input.endDate, ...dividends.map(row => row.ex_date)]);
@@ -261,7 +260,7 @@ function provenance(input: { startDate: string; endDate: string }) {
     dataRange: { start: input.startDate, end: input.endDate },
     retrievedAt: new Date().toISOString(),
     fxSource: test ? 'FINSIGHT_TEST_FIXTURE' : 'YAHOO_FINANCE_CHART',
-    corporateActionMethodology: 'Unadjusted close with effective-date provider/database dividends and splits; adjusted prices are not split-adjusted a second time.',
+    corporateActionMethodology: 'Provider closes and dividends are split-adjusted, so splits are reflected in the price series and not applied to share counts a second time.',
     feeMethodology: 'Entry and exit fee rates are applied explicitly and deducted from net value.',
     taxMethodology: 'Effective-dated educational tax estimate; not tax advice.',
   };

@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { MarketDataService } from '../../src/services/marketData.service';
 import { createApp } from '../../src/app';
 import { runMigrations } from '../../src/database/migrate';
 import { runSeeds } from '../../src/database/seed';
@@ -192,5 +193,27 @@ describe('FinSight Lab Scenarios API Integration Tests', () => {
     expect(detailData.data.contributions).toHaveLength(4);
     expect(detailData.data.contributions.map((item: any) => Number(item.amount))).toEqual([1000, 1000, 1000, 1000]);
     expect(detailData.data.contributions.every((item: any) => item.currency === 'INR')).toBe(true);
+  });
+  it('8. does not re-apply provider splits to split-adjusted provider prices', async () => {
+    // Real price 200 before a 2:1 split and 220 after; the provider restates the pre-split close as 100.
+    const bars = [
+      { date: '2024-01-02', open: 100, high: 100, low: 100, close: 100, adjusted_close: 100, volume: 1 },
+      { date: '2024-06-03', open: 110, high: 110, low: 110, close: 110, adjusted_close: 110, volume: 1 },
+    ];
+    const prices = vi.spyOn(MarketDataService, 'getPriceHistory').mockResolvedValue(bars as any);
+    const events = vi.spyOn(MarketDataService, 'getProviderCorporateActionsBetween')
+      .mockResolvedValue([{ type: 'SPLIT', date: '2024-03-01', ratio: 2, source: 'YAHOO_FINANCE_CHART' }] as any);
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/scenarios/simulate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol: 'RELIANCE', startDate: '2024-01-02', endDate: '2024-06-03', initialAmount: 100000, baseCurrency: 'INR' }),
+      });
+      const data = await res.json();
+      expect(res.status).toBe(200);
+      expect(data.data.financials.gross_value).toBeCloseTo(110000, 2);
+    } finally {
+      prices.mockRestore();
+      events.mockRestore();
+    }
   });
 });

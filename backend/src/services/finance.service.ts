@@ -158,7 +158,7 @@ export class FinanceService {
       const spent = transactions
         .filter(t => {
           const date = toIsoDate(t.transaction_date);
-          return t.transaction_type === 'EXPENSE' && t.category === b.category && date >= toIsoDate(b.start_date) && date <= toIsoDate(b.end_date);
+          return t.transaction_type === 'EXPENSE' && sameCategory(t.category, b.category) && date >= toIsoDate(b.start_date) && date <= toIsoDate(b.end_date);
         })
         .reduce((sum, t) => sum + (convertedAmounts.get(t.id) ?? 0), 0);
 
@@ -283,4 +283,8 @@ function inclusiveMonths(start: string, end: string): number {
 function addMonths(date: string, months: number): string {
   const value = new Date(`${date}T00:00:00Z`);
   return addMonthsUtc(value, months, value.getUTCDate()).toISOString().slice(0, 10);
+}
+
+function sameCategory(left: string | null, right: string | null): boolean {
+  return (left ?? '').trim().toLowerCase() === (right ?? '').trim().toLowerCase();
 }

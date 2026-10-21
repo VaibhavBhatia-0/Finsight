@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3, BriefcaseBusiness, ChartNoAxesCombined, FileDown, FlaskConical,
-  Gauge, Landmark, LineChart, ListChecks, ReceiptText, Repeat2, SearchCode,
+  Gauge, Landmark, LineChart, ListChecks, Repeat2, SearchCode,
   Scale, Settings, Sparkles, Star, Target, WalletCards,
 } from 'lucide-react';
 import BrandLogo from '../components/BrandLogo';
@@ -36,19 +36,11 @@ const groups: Array<{ label: string; items: NavItem[] }> = [
     ],
   },
   {
-    label: 'Plan',
+    label: 'Money & planning',
     items: [
-      { to: '/planning', label: 'Investment planning', icon: Target },
-      { to: '/finance/goals', label: 'Goals', icon: Sparkles },
-    ],
-  },
-  {
-    label: 'Finance',
-    items: [
+      { to: '/finance', label: 'Budgets, expenses & goals', icon: ListChecks, end: true },
       { to: '/finance/transactions', label: 'Transactions', icon: WalletCards },
-      { to: '/finance/expenses', label: 'Expenses', icon: ReceiptText },
-      { to: '/finance/budgets', label: 'Budgets', icon: ListChecks },
-      { to: '/finance/savings', label: 'Savings', icon: Sparkles },
+      { to: '/planning', label: 'Investment planning', icon: Target },
     ],
   },
   {

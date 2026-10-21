@@ -1,11 +1,8 @@
 import { NavLink } from 'react-router-dom';
 
 const links = [
+  ['/finance', 'Budgets, expenses & goals'],
   ['/finance/transactions', 'Transactions'],
-  ['/finance/expenses', 'Expenses'],
-  ['/finance/budgets', 'Budgets'],
-  ['/finance/savings', 'Savings'],
-  ['/finance/goals', 'Goals'],
 ] as const;
 
 export default function FinanceNav() {

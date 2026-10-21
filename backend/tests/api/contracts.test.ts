@@ -85,13 +85,13 @@ describe('Canonical API contract integration', () => {
 
     const budget = await fetch(`${baseUrl}/api/v1/finance/budgets`, {
       method: 'POST',
-      ...authenticated({ category: 'Food', amount: 1000, startDate: '2026-09-01', endDate: '2026-09-30' }),
+      ...authenticated({ category: 'food', amount: 1000, startDate: '2026-09-01', endDate: '2026-09-30' }),
     });
     const goal = await fetch(`${baseUrl}/api/v1/finance/goals`, {
       method: 'POST',
       ...authenticated({ name: 'Emergency fund', targetAmount: 50000, currentAmount: 5000, targetDate: '2027-09-01' }),
     });
-    expect((await budget.json()).data).toMatchObject({ category: 'Food' });
+    expect((await budget.json()).data).toMatchObject({ category: 'food' });
     const goalPayload = await goal.json();
     expect(goalPayload.data).toMatchObject({ name: 'Emergency fund' });
 
@@ -101,6 +101,8 @@ describe('Canonical API contract integration', () => {
     expect(summaryPayload.data.overview).toMatchObject({ totalIncome: 833, totalExpense: 250, netSavings: 583, savingsRate: 69.99, estimatedInvestableSurplus: 583 });
     expect(summaryPayload.meta).toMatchObject({ freshness: 'Synthetic', degraded: true });
     expect(summaryPayload.data.budgets).toHaveLength(1);
+    // Budget categories match expense categories regardless of letter case.
+    expect(summaryPayload.data.budgets[0]).toMatchObject({ spentAmount: 250, remainingAmount: 750, isExceeded: false });
     expect(summaryPayload.data.goals).toHaveLength(1);
 
     const insights = await fetch(`${baseUrl}/api/v1/insights`, authenticated());

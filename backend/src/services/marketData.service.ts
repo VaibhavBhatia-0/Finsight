@@ -336,3 +336,18 @@ function sortVisibleRows<T extends Record<string, any>>(rows: T[], filters: Scre
     return (a - b) * direction;
   });
 }
+
+/** Trailing 12-month dividend yield (%) from provider dividends; null when none were reported in the window. */
+export function trailingDividendYield(
+  dividends: Array<{ ex_date: string; amount: number | string; currency?: string | null }>,
+  price: number, currency: string, asOf: string,
+): number | null {
+  if (!(price > 0)) return null;
+  const end = asOf.slice(0, 10);
+  const start = new Date(`${end}T00:00:00Z`);
+  start.setUTCFullYear(start.getUTCFullYear() - 1);
+  const window = dividends.filter(row => row.ex_date > start.toISOString().slice(0, 10) && row.ex_date <= end && (!row.currency || row.currency === currency));
+  if (!window.length) return null;
+  const total = window.reduce((sum, row) => sum + Number(row.amount), 0);
+  return Number.isFinite(total) ? Math.round(total / price * 100 * 10_000) / 10_000 : null;
+}

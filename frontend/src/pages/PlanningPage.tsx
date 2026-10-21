@@ -17,7 +17,7 @@ export default function PlanningPage() {
       <Tab active={tool === 'replay'} onClick={() => setTool('replay')} icon={History}>Investment replay</Tab>
       <Tab active={tool === 'recurring'} onClick={() => setTool('recurring')} icon={Repeat2}>Recurring planner</Tab>
     </nav>
-    {tool === 'required' ? <RequiredContribution /> : <HistoricalPlanner tool={tool} />}
+    {tool === 'required' ? <RequiredContribution /> : <HistoricalPlanner key={tool} tool={tool} />}
   </main>;
 }
 
@@ -71,5 +71,5 @@ function HistoricalPlanner({ tool }: { tool: Exclude<Tool, 'required'> }) {
 function Tab({ active, onClick, icon: Icon, children }: { active: boolean; onClick: () => void; icon: typeof Calculator; children: string }) { return <button type="button" aria-current={active ? 'page' : undefined} className={active ? 'active' : ''} onClick={onClick}><Icon size={16} />{children}</button>; }
 function Field({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) { return <label>{label}<input {...props} /></label>; }
 function PlanStat({ label, value }: { label: string; value: string }) { return <div><dt>{label}</dt><dd>{value}</dd></div>; }
-function today() { return new Date().toISOString().slice(0, 10); }
+function today() { const now = new Date(); return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10); }
 function format(value: number) { return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(value); }

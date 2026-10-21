@@ -21,6 +21,22 @@ export default function StockDetailPage() {
   if (query.error) return <p role="alert" className="error-banner">This security is currently unavailable.</p>;
   if (!query.data) return null;
   const { stock, quote, fundamentals, dividends, corporateActions, eventAvailability } = query.data;
+  const sourced: Array<[string, string | null]> = [
+    ['EPS', fundamentals.eps == null ? null : numberOrNA(fundamentals.eps)],
+    ['Dividend yield (TTM)', fundamentals.dividendYield == null ? null : percentOrNA(fundamentals.dividendYield)],
+    ['Revenue', fundamentals.revenue == null ? null : compactMoney(fundamentals.revenue, stock.currency)],
+    ['Profit', fundamentals.profit == null ? null : compactMoney(fundamentals.profit, stock.currency)],
+    ['Total debt', fundamentals.totalDebt == null ? null : compactMoney(fundamentals.totalDebt, stock.currency)],
+  ];
+  const unavailable = [
+    ...(fundamentals.marketCap == null ? ['Market cap'] : []), ...(fundamentals.peRatio == null ? ['P/E'] : []),
+    ...sourced.filter(([, value]) => value == null).map(([label]) => label.replace(' (TTM)', '')),
+  ];
+  const facts: Array<[string, string]> = [
+    ...sourced.filter((row): row is [string, string] => row[1] != null),
+    ...(stock.industry ? [['Industry', stock.industry] as [string, string]] : []),
+    ['Exchange', stock.exchange_code], ['Country', stock.country_code],
+  ];
   const marketStock: MarketStock = { ...stock, quote };
   const changeTone = quote.changePercent == null ? '' : quote.changePercent >= 0 ? 'movement-up' : 'movement-down';
   const inWatchlist = watchlists.data?.some(list => list.items.some(item => String(item.stock_id) === String(stock.id)));
@@ -42,12 +58,12 @@ export default function StockDetailPage() {
     </div>
     {watchlists.addError && <p role="alert" className="error-banner">{watchlists.addError.message}</p>}
     <div className="notice my-4 flex flex-wrap items-center justify-between gap-3 p-3 text-sm"><span>{quote.source} · market timestamp {new Date(quote.marketTimestamp).toLocaleString()} · fetched {new Date(quote.fetchedAt).toLocaleString()}</span><FreshnessBadge freshness={quote.freshnessLabel} timestamp={quote.marketTimestamp} /></div>
-    <div className="metric-grid mb-4"><Metric label="Previous close" value={moneyOrNA(quote.previousClose, stock.currency)} /><Metric label="Day high" value={moneyOrNA(quote.high, stock.currency)} /><Metric label="Day low" value={moneyOrNA(quote.low, stock.currency)} /><Metric label="Volume" value={compactNumber(quote.volume)} /><Metric label="52-week high" value={moneyOrNA(quote.fiftyTwoWeekHigh, stock.currency)} /><Metric label="52-week low" value={moneyOrNA(quote.fiftyTwoWeekLow, stock.currency)} /><Metric label="Market cap" value={compactMoney(fundamentals.marketCap, stock.currency)} /><Metric label="P/E ratio" value={numberOrNA(fundamentals.peRatio)} /></div>
+    <div className="metric-grid mb-4"><Metric label="Previous close" value={moneyOrNA(quote.previousClose, stock.currency)} /><Metric label="Day high" value={moneyOrNA(quote.high, stock.currency)} /><Metric label="Day low" value={moneyOrNA(quote.low, stock.currency)} /><Metric label="Volume" value={compactNumber(quote.volume)} /><Metric label="52-week high" value={moneyOrNA(quote.fiftyTwoWeekHigh, stock.currency)} /><Metric label="52-week low" value={moneyOrNA(quote.fiftyTwoWeekLow, stock.currency)} />{fundamentals.marketCap != null && <Metric label="Market cap" value={compactMoney(fundamentals.marketCap, stock.currency)} />}{fundamentals.peRatio != null && <Metric label="P/E ratio" value={numberOrNA(fundamentals.peRatio)} />}</div>
 
     <section className="panel mb-4"><div className="panel-header"><div><h2 className="panel-title">Price, volume &amp; technical study</h2><p className="panel-subtitle">Server-calculated indicators from adjusted provider history.</p></div></div><StockAnalyticsPanel stock={marketStock} comparisonCandidates={(watchlists.data?.flatMap(list => list.items) ?? []).map(item => ({ id: item.stock_id, symbol: item.symbol, quote: item.quote }))} /></section>
 
     <div className="content-grid">
-      <section className="panel"><div className="panel-header"><div><h2 className="panel-title">Fundamentals &amp; market information</h2><p className="panel-subtitle">Only sourced metrics are shown · {fundamentals.source}</p></div></div><dl className="fundamental-grid"><Fact label="EPS" value={numberOrNA(fundamentals.eps)} /><Fact label="Dividend yield" value={percentOrNA(fundamentals.dividendYield)} /><Fact label="Revenue" value={compactMoney(fundamentals.revenue, stock.currency)} /><Fact label="Profit" value={compactMoney(fundamentals.profit, stock.currency)} /><Fact label="Total debt" value={compactMoney(fundamentals.totalDebt, stock.currency)} /><Fact label="Industry" value={stock.industry ?? 'N/A'} /><Fact label="Exchange" value={stock.exchange_code} /><Fact label="Country" value={stock.country_code} /></dl><p className="chart-provenance">Retrieved {new Date(fundamentals.retrievedAt).toLocaleString()}. Missing provider metrics remain N/A.</p></section>
+      <section className="panel"><div className="panel-header"><div><h2 className="panel-title">Fundamentals &amp; market information</h2><p className="panel-subtitle">Only sourced metrics are shown · {fundamentals.source}</p></div></div><dl className="fundamental-grid">{facts.map(([label, value]) => <Fact key={label} label={label} value={value} />)}</dl><p className="chart-provenance">Retrieved {new Date(fundamentals.retrievedAt).toLocaleString()}.{fundamentals.dividendYield != null && ' Dividend yield is trailing 12 months, computed from provider-reported dividends and the latest price.'}{unavailable.length > 0 && ` Not available from the current market-data provider: ${unavailable.join(', ')}.`}</p></section>
       <section className="panel"><div className="panel-header"><div><h2 className="panel-title">Corporate-action timeline</h2><p className="panel-subtitle">Latest 24 deduplicated events · most recent first</p></div></div>{events.length ? <ol className="event-timeline">{events.map(item => <li key={item.id}><time>{item.date.slice(0, 10)}</time><div><strong>{item.type}</strong><p>{item.detail}</p><small>Source · {item.source}</small></div></li>)}</ol> : <div className="empty-state"><p>No sourced corporate actions are available.</p></div>}<p className="chart-provenance">Earnings events: {eventAvailability?.earnings === 'UNAVAILABLE_FROM_CURRENT_PROVIDER' ? 'Unavailable from the current provider' : eventAvailability?.earnings ?? 'Unavailable'}.</p></section>
     </div>
     {user ? <AlertPanel stockId={stock.id} currency={stock.currency} /> : <section className="panel mt-4"><div className="panel-header"><div><h2 className="panel-title">Market alerts</h2><p className="panel-subtitle">Sign in to configure user-owned alerts.</p></div></div></section>}

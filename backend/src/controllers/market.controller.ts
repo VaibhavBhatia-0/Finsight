@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { MarketDataService } from '../services/marketData.service';
+import { MarketDataService, trailingDividendYield } from '../services/marketData.service';
 import { FXService } from '../services/fx.service';
 import { StockRepository } from '../repositories/stock.repository';
 import { sendSuccess, sendError } from '../utils/response';
@@ -117,6 +117,9 @@ export class MarketController {
       ], row => `${isoDate(row.action_date)}:${row.action_type}:${Number(row.ratio).toFixed(8)}`)
         .map(row => ({ ...row, action_date: isoDate(row.action_date), source: row.source || 'DATABASE' }))
         .sort((left, right) => left.action_date.localeCompare(right.action_date));
+      if (fundamentals.dividendYield == null) {
+        fundamentals.dividendYield = trailingDividendYield(dividends, quote.price, stock.currency, quote.marketTimestamp);
+      }
       sendSuccess(res, { stock, quote, fundamentals, dividends, corporateActions, eventAvailability: { dividends: 'AVAILABLE_WHEN_REPORTED', splits: 'AVAILABLE_WHEN_REPORTED', earnings: 'UNAVAILABLE_FROM_CURRENT_PROVIDER' } }, 200, quote.freshnessLabel, {
         source: quote.source, marketTimestamp: quote.marketTimestamp, fetchedAt: quote.fetchedAt, degraded: quote.isStale,
       });
