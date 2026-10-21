@@ -85,9 +85,11 @@ export class UserPreferencesRepository {
     const theme = updates.theme ?? current.theme;
     const defaultCurrency = updates.default_currency ?? current.default_currency;
     const defaultBenchmarkId = updates.default_benchmark_id !== undefined ? updates.default_benchmark_id : current.default_benchmark_id;
-    const dashboardLayout = updates.dashboard_layout ? JSON.stringify(updates.dashboard_layout) : current.dashboard_layout;
-    const selectedIndices = updates.selected_market_indices ? JSON.stringify(updates.selected_market_indices) : current.selected_market_indices;
-    const watchlistPrefs = updates.watchlist_preferences ? JSON.stringify(updates.watchlist_preferences) : current.watchlist_preferences;
+    // JSONB values are always serialized here: node-postgres turns a raw JS array into a Postgres
+    // array literal ('{"a","b"}'), which JSONB rejects. PGlite serializes by column type, so it hides this.
+    const dashboardLayout = JSON.stringify(updates.dashboard_layout ?? current.dashboard_layout);
+    const selectedIndices = JSON.stringify(updates.selected_market_indices ?? current.selected_market_indices);
+    const watchlistPrefs = JSON.stringify(updates.watchlist_preferences ?? current.watchlist_preferences);
     const taxResidency = updates.tax_residency !== undefined ? updates.tax_residency : current.tax_residency;
     const taxStatus = updates.tax_status !== undefined ? updates.tax_status : current.tax_status;
 

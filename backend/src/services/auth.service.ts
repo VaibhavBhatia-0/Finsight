@@ -115,6 +115,11 @@ export class AuthService {
   }
 
   static async updatePreferences(userId: string, updates: Parameters<typeof UserPreferencesRepository.update>[1]) {
+    if (!(await UserPreferencesRepository.getByUserId(userId))) {
+      const user = await UserRepository.findById(userId);
+      if (!user) throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+      await UserPreferencesRepository.createDefault(userId, user.base_currency);
+    }
     const updated = await UserPreferencesRepository.update(userId, updates);
     return updated;
   }
