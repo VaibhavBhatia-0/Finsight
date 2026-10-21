@@ -50,9 +50,6 @@ export function prepareSecurityUniverse(
   minimumCounts: Record<ExchangeCode, number> = MINIMUM_COUNTS,
   minimumTotal = MINIMUM_TOTAL,
 ): PreparedUniverse {
-  const sha256 = createHash('sha256')
-    .update(JSON.stringify([documents.nse, documents.nasdaq, documents.otherUs]))
-    .digest('hex');
   const raw: SecurityInput[] = [];
   let skipped = 0;
   const rejected: string[] = [];
@@ -131,6 +128,12 @@ export function prepareSecurityUniverse(
   if (rejected.length) {
     throw new Error(`Security universe validation failed (${rejected.length} rejection(s)): ${rejected.slice(0, 5).join('; ')}`);
   }
+  // Fingerprint the validated records, not the raw files: the NASDAQ directories
+  // carry a "File Creation Time" footer that changes on every refresh, which would
+  // make an approved dry run unrepeatable even when no security changed.
+  const sha256 = createHash('sha256')
+    .update(JSON.stringify([...securities].sort((a, b) => `${a.exchange}:${a.symbol}`.localeCompare(`${b.exchange}:${b.symbol}`))))
+    .digest('hex');
   return { securities, counts, skipped, rejected: 0, sha256 };
 }
 

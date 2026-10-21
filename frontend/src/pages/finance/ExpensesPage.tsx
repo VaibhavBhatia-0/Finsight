@@ -1,7 +1,6 @@
 // src/pages/finance/ExpensesPage.tsx
 import React, { FormEvent, useState } from "react";
-import { useCreateExpense, useDeleteExpense, useExpenses } from "../../hooks/useExpenses";
-import { Expense } from "../../hooks/useExpenses";
+import { Expense, useCreateExpense, useDeleteExpense, useExpenses } from "../../hooks/useExpenses";
 import { useUserPreferences } from "../../context/UserPreferencesContext";
 import FinanceNav from "../../components/FinanceNav";
 

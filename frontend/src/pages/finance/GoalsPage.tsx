@@ -1,7 +1,6 @@
 // src/pages/finance/GoalsPage.tsx
 import React, { FormEvent, useState } from "react";
-import { useCreateGoal, useDeleteGoal, useGoals, useUpdateGoal } from "../../hooks/useGoals";
-import { Goal } from "../../hooks/useGoals";
+import { Goal, useCreateGoal, useDeleteGoal, useGoals, useUpdateGoal } from "../../hooks/useGoals";
 import FinanceNav from "../../components/FinanceNav";
 import { usePortfolios } from "../../hooks/usePortfolios";
 import { Link } from "react-router-dom";

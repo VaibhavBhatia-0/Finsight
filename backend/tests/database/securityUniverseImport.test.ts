@@ -90,6 +90,18 @@ describe('complete catalogue import against isolated PostgreSQL', () => {
     expect(syncs.rows.map(row => row.security_count)).toEqual([6, 6]);
   });
 
+  it('keeps the approved fingerprint when only the directory timestamp footer changes', () => {
+    const approved = prepareSecurityUniverse(documents, minimumCounts, 6).sha256;
+    const refreshed = {
+      ...documents,
+      nasdaq: documents.nasdaq.replace('File Creation Time: 12:00', 'File Creation Time: 13:00'),
+      otherUs: documents.otherUs.replace('File Creation Time: 12:00', 'File Creation Time: 13:00'),
+    };
+    expect(prepareSecurityUniverse(refreshed, minimumCounts, 6).sha256).toBe(approved);
+    const renamed = { ...documents, nasdaq: documents.nasdaq.replace('Apple Inc.', 'Apple Incorporated') };
+    expect(prepareSecurityUniverse(renamed, minimumCounts, 6).sha256).not.toBe(approved);
+  });
+
   it('rejects changed or incomplete sources before modifying the database', async () => {
     const before = await pg.query<{ count: number }>('SELECT COUNT(*)::int AS count FROM stocks');
     await expect(syncSecurityUniverse(client, {

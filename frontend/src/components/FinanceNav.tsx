@@ -9,5 +9,5 @@ const links = [
 ] as const;
 
 export default function FinanceNav() {
-  return <nav className="subnav" aria-label="Personal finance"><>{links.map(([to, label]) => <NavLink key={to} to={to}>{label}</NavLink>)}</></nav>;
+  return <nav className="subnav" aria-label="Personal finance">{links.map(([to, label]) => <NavLink key={to} to={to}>{label}</NavLink>)}</nav>;
 }
