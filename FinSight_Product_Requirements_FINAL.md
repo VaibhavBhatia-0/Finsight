@@ -3,9 +3,15 @@
 > **Source-of-truth rule:** The latest locked/final reconciliation
 > sections in this document supersede earlier draft wording.
 
-> **Status:** Product requirements and architecture decisions finalized;
-> implementation phase ready\
-> **Implementation:** Ready to begin\
+> **Status (22 October 2026):** Implemented and deployed (Vercel
+> frontend, Render Docker backend, Supabase PostgreSQL). Where the build
+> differs from this document: personal finance is one page (`/finance`)
+> rather than separate Expenses/Budgets/Savings/Goals pages; the
+> market-data provider (Yahoo chart data) supplies no market cap, P/E,
+> EPS, revenue, profit or debt, so those fundamentals and the screener
+> filters that depend on them show as unavailable; dividend yield is
+> computed from provider dividends. See the Implemented Schema section of
+> `FinSight_Database_SQL_Specification_FINAL.md` and `DEPLOYMENT.md`.\
 > **Purpose:** Living document to track the product vision,
 > requirements, features, and decisions for FinSight.
 

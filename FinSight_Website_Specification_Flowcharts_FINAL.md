@@ -408,6 +408,12 @@ Simulate / Open in FinSight Lab
 Technical indicators include moving averages, RSI, MACD, and Bollinger
 Bands, with extensibility for future configurable indicators.
 
+As implemented, the Fundamentals panel shows only metrics that have a
+source. The current provider (Yahoo chart data) supplies no market cap,
+P/E, EPS, revenue, profit or debt, so those are listed once as
+unavailable instead of shown as rows of N/A. Dividend yield is a trailing
+12-month figure computed from provider dividends and the latest price.
+
 ## FinSight Lab
 
 ``` text
@@ -425,8 +431,15 @@ Methodology and source/freshness information.
 
 ## Personal Finance
 
-Expenses, Budgets, Savings, and Goals live under the authenticated
-user's Finance area. Expense tracking is profile/account data. Budgets
+Expenses, Budgets, Savings, and Goals live together on one authenticated
+page, **Budgets, expenses & goals** (`/finance`). The older
+`/finance/expenses`, `/finance/budgets`, `/finance/savings` and
+`/finance/goals` URLs redirect there. The full income/expense ledger and
+recurring rules stay on `/finance/transactions`. Budgets show spending
+against their limit (matched to expense categories regardless of case),
+expenses can be added against budget categories, and each goal shows
+progress, required monthly pace and projected completion, with savings
+recorded inline. Expense tracking is profile/account data. Budgets
 compare planned versus actual spending. Goals show progress and
 projected completion. Finance can expose estimated investable surplus as
 an input to FinSight Lab without providing investment recommendations.
@@ -463,31 +476,41 @@ End-of-day, or Historical.
 This section is authoritative where earlier flowcharts use older
 terminology or omit newly locked flows.
 
-## Navigation --- Locked
+## Navigation --- As Implemented (22 October 2026)
 
 ``` text
-Dashboard
+OVERVIEW
+└── Dashboard
 
 INVEST
 ├── Markets
+├── Compare stocks
 ├── Watchlist
 ├── Portfolios
-├── FinSight Lab
-└── Stock Screener
+└── Stock screener
 
-FINANCE
-├── Expenses
-├── Budgets
-├── Savings
-└── Goals
+FINSIGHT LAB
+├── Lab overview  (also Compare Scenarios and Backtest Strategy)
+├── Single investment
+├── Recurring / DCA
+└── Portfolio scenario
+
+MONEY & PLANNING
+├── Budgets, expenses & goals   (/finance)
+├── Transactions                (/finance/transactions)
+└── Investment planning         (/planning: required contribution,
+                                  what-if, replay, recurring planner)
 
 ANALYZE
 ├── Insights
-└── Backtesting
+├── Backtesting
+└── Reports
 
-SYSTEM
-└── Settings
+Settings
 ```
+
+This supersedes the earlier locked navigation, which listed Expenses,
+Budgets, Savings and Goals as separate pages.
 
 ## FinSight Lab --- Locked User Flows
 

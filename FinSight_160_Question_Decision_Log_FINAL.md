@@ -4,6 +4,10 @@
 > collaborative discussion. Questions 161--167 were answered after the
 > 160-question milestone and are included as an appendix.
 
+> This log records decisions as they were made and is not updated as the
+> code changes. For the implemented state, see the status notes in the
+> product, tech-stack, website and database documents.
+
 ## Global decision rule
 
 -   Simple, free, legally usable, easy to deploy.

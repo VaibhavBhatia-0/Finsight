@@ -3,6 +3,13 @@
 > **Source-of-truth rule:** The latest locked/final reconciliation
 > sections in this document supersede earlier draft wording.
 
+> **Status (22 October 2026):** The stack below is what was built. It is
+> deployed as a Vercel static frontend, a Render Docker web service
+> (Node/Express plus the Python analytics runtime at
+> `/opt/venv/bin/python`) and Supabase PostgreSQL. Market and FX data come
+> from Yahoo chart endpoints, server-side; Twelve Data is an optional
+> quote adapter. See `DEPLOYMENT.md`.
+
 ## 1. Complete Technology Stack
 
 ``` text

@@ -29,7 +29,6 @@ export class PortfolioService {
       const amount = Number(tx.amount);
       const fee = Number(tx.fee_amount || 0);
       const qty = Number(tx.quantity || 0);
-      const price = Number(tx.price || 0);
       const txCurrency = tx.currency.toUpperCase();
       const fxRate = txCurrency === baseCurrency.toUpperCase()
         ? 1

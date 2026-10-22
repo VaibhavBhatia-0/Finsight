@@ -22,7 +22,8 @@ Account linking is intentionally conservative: an existing password account is l
 
 - Price, change, volume, and sourced-fundamental sorting is limited to the currently loaded page. FinSight does not fan out live requests across the full universe just to sort it.
 - The synchronized listing universe uses official NSE and Nasdaq Trader directories. BSE quote resolution is supported, but complete BSE directory coverage is not claimed because no clean first-party directory is integrated.
-- Missing Yahoo Chart fundamentals remain `N/A`; they are never filled with synthetic or unrelated values.
+- Yahoo Chart supplies no market cap, P/E, EPS, revenue, profit or debt. These are listed once as unavailable on the stock page and are never filled with synthetic or unrelated values. Dividend yield is the only computed metric: a trailing 12-month sum of provider-reported dividends divided by the latest price.
+- Yahoo closes and dividend amounts are already split-adjusted. Scenario simulations therefore do not apply provider split events to share counts again; doing so previously doubled results across any split (for example Reliance's October 2024 bonus).
 - The Market Overview index change-percentage issue is intentionally parked for a later pass.
 
 ## Dependency audit decisions

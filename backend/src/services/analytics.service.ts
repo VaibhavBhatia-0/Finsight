@@ -3,7 +3,8 @@ import path from 'path';
 import { AppError } from '../middleware/errorHandler';
 
 export class AnalyticsService {
-  private static pythonPath = process.env.PYTHON_PATH || 'python';
+  // Debian/Ubuntu images ship only `python3`; `python` exists by default on Windows.
+  private static pythonPath = process.env.PYTHON_PATH || (process.platform === 'win32' ? 'python' : 'python3');
   private static analyticsBaseDir = process.env.ANALYTICS_DIR
     ? path.resolve(process.env.ANALYTICS_DIR)
     : path.resolve(__dirname, '../../../analytics');

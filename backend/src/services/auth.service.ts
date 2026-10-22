@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { UserRepository, UserRow } from '../repositories/user.repository';
+import { UserRepository } from '../repositories/user.repository';
 import { UserPreferencesRepository, UserPreferencesRow } from '../repositories/userPreferences.repository';
 import { hashPassword, comparePassword } from '../utils/password';
 import { signToken } from '../utils/jwt';
