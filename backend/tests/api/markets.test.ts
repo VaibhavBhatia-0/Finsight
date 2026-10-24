@@ -179,6 +179,17 @@ describe('Markets & FX API Integration Tests (/api/v1/markets)', () => {
     expect(missing.data.items).toEqual([]);
   });
 
+  it('9b. lists featured large caps first and resolves everyday names and spaced company names', async () => {
+    const browse = await (await fetch(`${baseUrl}/api/v1/markets/stocks?limit=3`)).json();
+    expect(browse.data.items.map((row: any) => row.symbol)).toEqual(['AAPL', 'MSFT', 'NVDA']);
+    const alias = await (await fetch(`${baseUrl}/api/v1/markets/securities/search?q=google&page=1&pageSize=5`)).json();
+    expect(alias.data.items[0].symbol).toBe('GOOGL');
+    const spaced = await (await fetch(`${baseUrl}/api/v1/markets/securities/search?q=Micro%20soft&page=1&pageSize=5`)).json();
+    expect(spaced.data.items.some((row: any) => row.symbol === 'MSFT')).toBe(true);
+    const listed = await (await fetch(`${baseUrl}/api/v1/markets/stocks?q=google&limit=5`)).json();
+    expect(listed.data.items[0].symbol).toBe('GOOGL');
+  });
+
   it('10. returns a selected quote, date-specific historical price, and server technicals', async () => {
     const search = await (await fetch(`${baseUrl}/api/v1/markets/securities/search?q=AAPL&page=1&pageSize=5`)).json();
     const stockId = search.data.items[0].id;

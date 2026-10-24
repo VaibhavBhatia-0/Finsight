@@ -76,6 +76,23 @@ class ScenarioEngineKnownAnswerTests(unittest.TestCase):
         self.assertEqual(result["financials"]["gross_value"], 1080)
         self.assertEqual(result["financials"]["net_profit"], 80)
 
+    def test_portfolio_series_waits_for_every_market_and_measures_lump_sum_risk(self):
+        a_prices = [{"date": d, "close": c} for d, c in [("2024-01-01", 10), ("2024-01-02", 11), ("2024-01-03", 9), ("2024-01-04", 12)]]
+        # B's exchange is shut on the first day, so the portfolio cannot be valued until it trades.
+        b_prices = [{"date": d, "close": c} for d, c in [("2024-01-02", 20), ("2024-01-03", 20), ("2024-01-04", 22)]]
+        result = simulate_portfolio(self.base(
+            mode="PORTFOLIO_SCENARIO", end_date="2024-01-04", assets=[
+                {"symbol": "A", "weight": .5, "price_history": a_prices, "asset_currency": "USD", "exchange_rates": []},
+                {"symbol": "B", "weight": .5, "price_history": b_prices, "asset_currency": "USD", "exchange_rates": []},
+            ],
+        ))
+        series = result["performance_series"]
+        self.assertEqual(series[0]["date"], "2024-01-02")
+        self.assertTrue(all(row["value"] > 600 for row in series))
+        self.assertIsNotNone(result["risk_metrics"]["volatility"])
+        self.assertIsNotNone(result["risk_metrics"]["sharpe_ratio"])
+        self.assertGreater(result["risk_metrics"]["max_drawdown"], 0)
+
     def test_weekly_recurring_growth_uses_each_trade_date_price_and_amount(self):
         result = simulate_recurring(self.base(
             mode="RECURRING_INVESTMENT", initial_amount=100, start_date="2024-12-25", end_date="2025-01-08",

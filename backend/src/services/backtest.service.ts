@@ -36,10 +36,13 @@ export class BacktestService {
     }));
 
     const strategyType = input.strategyType || 'BUY_AND_HOLD';
-    const benchmarkConfig = input.benchmarkSymbol ? BENCHMARKS_BY_SYMBOL[input.benchmarkSymbol as keyof typeof BENCHMARKS_BY_SYMBOL] : undefined;
-    const benchmarkPrices = benchmarkConfig
-      ? await MarketDataService.getExternalPriceHistory(input.benchmarkSymbol, benchmarkConfig.exchange, input.startDate, input.endDate)
+    const requestedBenchmark = input.benchmarkSymbol ? BENCHMARKS_BY_SYMBOL[input.benchmarkSymbol as keyof typeof BENCHMARKS_BY_SYMBOL] : undefined;
+    // The benchmark is an optional comparison: if its index history cannot be loaded, the strategy still runs and
+    // the benchmark fields stay empty rather than the whole backtest failing.
+    const benchmarkPrices = requestedBenchmark
+      ? await MarketDataService.getExternalPriceHistory(input.benchmarkSymbol, requestedBenchmark.exchange, input.startDate, input.endDate).catch(() => [])
       : [];
+    const benchmarkConfig = benchmarkPrices.length ? requestedBenchmark : undefined;
     const benchmarkRates = benchmarkConfig
       ? await FXService.getRateSeries(benchmarkConfig.currency, portfolio.base_currency, benchmarkPrices.map(row => row.date))
       : [];
@@ -70,7 +73,7 @@ export class BacktestService {
         endDate: input.endDate,
         initialAmount: input.initialAmount,
         benchmarkId: benchmarkRow?.id,
-        parameters: { portfolioId: portfolio.id, benchmarkSymbol: input.benchmarkSymbol || null, feeRate: input.feeRate, fixedFee: input.fixedFee },
+        parameters: { portfolioId: portfolio.id, benchmarkSymbol: benchmarkConfig ? input.benchmarkSymbol : null, feeRate: input.feeRate, fixedFee: input.fixedFee },
       }, executor);
       await BacktestRepository.saveResult(backtest.id, calculated, executor);
       return this.present(await BacktestRepository.find(backtest.id, userId, executor));

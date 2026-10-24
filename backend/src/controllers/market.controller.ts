@@ -39,7 +39,7 @@ export class MarketController {
       const query = req.query as Record<string, string>;
       const list = await StockRepository.list({
         q: query.q, exchange: query.exchange, country: query.country, sector: query.sector,
-        page: Number(query.page), limit: Number(query.limit), sortBy: query.sortBy as 'symbol' | 'company', sortOrder: query.sortOrder as 'asc' | 'desc',
+        page: Number(query.page), limit: Number(query.limit), sortBy: query.sortBy as 'popular' | 'symbol' | 'company', sortOrder: query.sortOrder as 'asc' | 'desc',
       });
       if (!list.total && !query.q && !query.exchange && !query.country && !query.sector) {
         throw new AppError('The security reference universe is unavailable', 503, 'MARKET_UNIVERSE_UNAVAILABLE');

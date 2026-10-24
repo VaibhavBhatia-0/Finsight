@@ -31,7 +31,7 @@ export const screenerQuerySchema = z.object({
   minYearPosition: z.coerce.number().min(0).max(100).optional(),
   maxYearPosition: z.coerce.number().min(0).max(100).optional(),
   movingAverageRelation: z.enum(['ABOVE_50', 'BELOW_50', 'ABOVE_200', 'BELOW_200', 'GOLDEN_CROSS', 'DEATH_CROSS']).optional(),
-  sortBy: z.enum(['symbol', 'name', 'price', 'marketCap', 'peRatio', 'eps', 'dividendYield', 'revenue', 'profit', 'debt', 'volume', 'volatility', 'rsi14', 'yearPosition']).default('marketCap'),
+  sortBy: z.enum(['popular', 'symbol', 'name', 'price', 'marketCap', 'peRatio', 'eps', 'dividendYield', 'revenue', 'profit', 'debt', 'volume', 'volatility', 'rsi14', 'yearPosition']).default('marketCap'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -46,7 +46,7 @@ export const stockListQuerySchema = z.object({
   sector: z.string().trim().max(100).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  sortBy: z.enum(['symbol', 'company']).default('symbol'),
+  sortBy: z.enum(['popular', 'symbol', 'company']).default('popular'),
   sortOrder: z.enum(['asc', 'desc']).default('asc'),
 });
 

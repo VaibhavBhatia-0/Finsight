@@ -16,9 +16,10 @@ interface UniverseStats {
   sectors: Array<{ sector: string; count: number }>;
 }
 
-type SortChoice = 'name' | 'symbol' | 'volatility';
+type SortChoice = 'popular' | 'name' | 'symbol' | 'volatility';
 
 const sortChoices: Array<{ value: SortChoice; label: string }> = [
+  { value: 'popular', label: 'Popular companies first' },
   { value: 'name', label: 'Company name A–Z' },
   { value: 'symbol', label: 'Ticker A–Z' },
   { value: 'volatility', label: 'Calmest price history first' },
@@ -35,7 +36,7 @@ export default function ScreenerPage() {
   const [search, setSearch] = useState('');
   const [exchange, setExchange] = useState('');
   const [sectorText, setSectorText] = useState('');
-  const [sort, setSort] = useState<SortChoice>('name');
+  const [sort, setSort] = useState<SortChoice>('popular');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [maxVolatility, setMaxVolatility] = useState('');

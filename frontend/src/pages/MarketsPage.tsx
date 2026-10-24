@@ -28,7 +28,7 @@ export default function MarketsPage() {
   const deferredSearch = useDeferredValue(search.trim());
   const [exchange, setExchange] = useState('');
   const [sector, setSector] = useState('');
-  const [sortBy, setSortBy] = useState<'symbol' | 'company' | 'price' | 'change' | 'volume'>('symbol');
+  const [sortBy, setSortBy] = useState<'popular' | 'symbol' | 'company' | 'price' | 'change' | 'volume'>('popular');
   const [displayCurrency, setDisplayCurrency] = useState('NATIVE');
   const [expanded, setExpanded] = useState<ApiId | null>(null);
   const navigate = useNavigate();
@@ -38,7 +38,7 @@ export default function MarketsPage() {
   useEffect(() => setSearch(searchParams.get('q') ?? ''), [searchParams]);
   const stocks = useQuery({
     queryKey: ['markets', deferredSearch, exchange, sector, page, pageSize, sortBy],
-    queryFn: async () => (await api.get<MarketStocksResponse>(endpoints.markets.stocks, { params: { q: deferredSearch || undefined, exchange: exchange || undefined, sector: sector || undefined, page, limit: pageSize, sortBy: sortBy === 'company' ? 'company' : 'symbol' } })).data,
+    queryFn: async () => (await api.get<MarketStocksResponse>(endpoints.markets.stocks, { params: { q: deferredSearch || undefined, exchange: exchange || undefined, sector: sector || undefined, page, limit: pageSize, sortBy: sortBy === 'company' || sortBy === 'symbol' ? sortBy : 'popular' } })).data,
     staleTime: 30_000,
   });
   const overview = useQuery({ queryKey: ['markets-overview'], queryFn: async () => (await api.get<MarketOverview>(endpoints.markets.overview)).data, staleTime: 30_000, refetchInterval: query => query.state.status === 'error' ? false : 60_000 });
@@ -84,7 +84,7 @@ export default function MarketsPage() {
           <summary>More options</summary>
           <div className="market-filter-row">
             <label>Sector<input value={sector} onChange={event => { setSector(event.target.value); resetPage(); }} placeholder="e.g. Technology" /></label>
-            <label>Sort<select value={sortBy} onChange={event => { setSortBy(event.target.value as typeof sortBy); resetPage(); }}><option value="symbol">Symbol</option><option value="company">Company</option><option value="price">Visible-page price</option><option value="change">Visible-page change</option><option value="volume">Visible-page volume</option></select></label>
+            <label>Sort<select value={sortBy} onChange={event => { setSortBy(event.target.value as typeof sortBy); resetPage(); }}><option value="popular">Popular first</option><option value="symbol">Symbol</option><option value="company">Company</option><option value="price">Visible-page price</option><option value="change">Visible-page change</option><option value="volume">Visible-page volume</option></select></label>
             <label>Rows<select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); resetPage(); }}><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></label>
           </div>
         </details>

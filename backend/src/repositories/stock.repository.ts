@@ -1,6 +1,37 @@
 import { db } from '../database/db';
 import type { ScreenerFilters } from '../validators/market.validator';
 
+/**
+ * Widely held large caps across the four markets, listed first when browsing so the opening page shows companies
+ * with deep, reliable price history rather than whichever tickers sort first alphabetically.
+ */
+export const FEATURED_SYMBOLS = [
+  'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'RELIANCE', 'TCS', 'HDFCBANK', 'TSLA',
+  'INFY', 'ICICIBANK', 'JPM', 'V', 'UNH', 'BHARTIARTL', 'AVGO', 'SBIN', 'LLY', 'WMT',
+  'ITC', 'MA', 'LT', 'XOM', 'HINDUNILVR', 'JNJ', 'COST', 'KOTAKBANK', 'NFLX', 'AXISBANK', 'BAJFINANCE',
+];
+
+/** Everyday names people search for that appear in neither the ticker nor the listed company name. */
+const SEARCH_ALIASES: Record<string, string> = {
+  UHG: 'UNH', UNITEDHEALTHCARE: 'UNH', GOOGLE: 'GOOGL', ALPHABET: 'GOOGL', FACEBOOK: 'META',
+  HDFC: 'HDFCBANK', SBI: 'SBIN', AIRTEL: 'BHARTIARTL', 'L&T': 'LT', HUL: 'HINDUNILVR', KOTAK: 'KOTAKBANK',
+};
+
+/** The search text in the forms the queries compare against: as typed, without spaces, and any ticker alias. */
+function searchTerms(raw: string) {
+  const query = raw.trim().toUpperCase();
+  const compact = query.replace(/[\s.,'-]+/g, '');
+  const alias = SEARCH_ALIASES[compact]
+    ?? Object.entries(SEARCH_ALIASES).find(([name]) => name.length >= 6 && compact.startsWith(name))?.[1]
+    ?? '';
+  return { query, compact, alias };
+}
+
+/** Sort key that lists featured companies first (primary listings before their BSE duplicates). `$n` holds FEATURED_SYMBOLS. */
+function featuredRank(param: string) {
+  return `COALESCE(array_position(${param}::text[], UPPER(s.symbol)), 100000) + CASE WHEN e.code = 'BSE' THEN 50000 ELSE 0 END`;
+}
+
 export interface StockRow {
   id: string;
   symbol: string;
@@ -24,7 +55,7 @@ export interface StockListFilters {
   sector?: string;
   page?: number;
   limit?: number;
-  sortBy?: 'symbol' | 'company';
+  sortBy?: 'popular' | 'symbol' | 'company';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -45,10 +76,12 @@ export class StockRepository {
     const limit = Math.max(1, Math.min(100, filters.limit || 20));
     const clauses = ['s.is_active = TRUE'];
     const params: unknown[] = [];
-    if (filters.q?.trim()) {
-      const value = `%${filters.q.trim().toUpperCase()}%`;
-      params.push(value, value, value);
-      clauses.push(`(UPPER(s.symbol) LIKE $${params.length - 2} OR UPPER(s.company_name) LIKE $${params.length - 1} OR UPPER(s.display_symbol) LIKE $${params.length})`);
+    const terms = filters.q?.trim() ? searchTerms(filters.q) : null;
+    if (terms) {
+      params.push(`%${terms.query}%`, `%${terms.compact}%`, terms.alias);
+      const [like, compact, alias] = [params.length - 2, params.length - 1, params.length];
+      clauses.push(`(UPPER(s.symbol) LIKE $${like} OR UPPER(s.company_name) LIKE $${like} OR UPPER(s.display_symbol) LIKE $${like}
+        OR REPLACE(UPPER(s.company_name), ' ', '') LIKE $${compact} OR UPPER(s.symbol) = $${alias})`);
     }
     if (filters.exchange) { params.push(filters.exchange.toUpperCase()); clauses.push(`UPPER(e.code) = $${params.length}`); }
     if (filters.country) { params.push(filters.country.toUpperCase()); clauses.push(`UPPER(e.country_code) = $${params.length}`); }
@@ -56,14 +89,24 @@ export class StockRepository {
     const where = clauses.join(' AND ');
     const count = await db.query<{ total: string }>(`SELECT COUNT(*)::text AS total FROM stocks s JOIN exchanges e ON s.exchange_id = e.id WHERE ${where}`, params);
     const total = Number(count.rows[0]?.total || 0);
-    const sortColumn = filters.sortBy === 'company' ? 's.company_name' : 's.symbol';
     const sortOrder = filters.sortOrder === 'desc' ? 'DESC' : 'ASC';
+    let ordering = `${filters.sortBy === 'company' ? 's.company_name' : 's.symbol'} ${sortOrder}`;
+    if (filters.sortBy === 'popular') {
+      // An exact ticker (or alias) match leads a search; otherwise featured companies come first, then A to Z.
+      let exact = '';
+      if (terms) {
+        params.push(terms.query, terms.alias);
+        exact = `CASE WHEN UPPER(s.symbol) IN ($${params.length - 1}, $${params.length}) THEN 0 ELSE 1 END, `;
+      }
+      params.push(FEATURED_SYMBOLS);
+      ordering = `${exact}${featuredRank(`$${params.length}`)}, s.symbol ASC`;
+    }
     params.push(limit, (page - 1) * limit);
     const result = await db.query<StockRow>(`
       SELECT s.*, e.code AS exchange_code, e.name AS exchange_name, e.country_code
       FROM stocks s JOIN exchanges e ON s.exchange_id = e.id
       WHERE ${where}
-      ORDER BY ${sortColumn} ${sortOrder}, s.id ASC
+      ORDER BY ${ordering}, s.id ASC
       LIMIT $${params.length - 1} OFFSET $${params.length}
     `, params);
     return { items: result.rows, page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) };
@@ -96,16 +139,19 @@ export class StockRepository {
   static async searchSecurities(filters: { q: string; page?: number; pageSize?: number }) {
     const page = Math.max(1, filters.page || 1);
     const pageSize = Math.max(1, Math.min(50, filters.pageSize || 20));
-    const query = filters.q.trim().toUpperCase();
+    const { query, compact, alias } = searchTerms(filters.q);
     if (!query) return { items: [], pagination: { page, pageSize, total: 0, totalPages: 0 } };
     const contains = `%${query}%`;
     const prefix = `${query}%`;
+    // $1 and $2 are shared by the count and the page query; $6 onward are only used for ordering.
     const where = `s.is_active = TRUE AND (
       UPPER(s.symbol) LIKE $1 OR UPPER(s.display_symbol) LIKE $1 OR UPPER(s.provider_symbol) LIKE $1
       OR UPPER(s.company_name) LIKE $1 OR UPPER(e.code) LIKE $1 OR UPPER(e.name) LIKE $1
       OR UPPER(e.country_code) LIKE $1
+      OR REPLACE(UPPER(s.company_name), ' ', '') LIKE $2 OR UPPER(s.symbol) = $3
     )`;
-    const count = await db.query<{ total: string }>(`SELECT COUNT(*)::text AS total FROM stocks s JOIN exchanges e ON e.id = s.exchange_id WHERE ${where}`, [contains]);
+    const shared = [contains, `%${compact}%`, alias];
+    const count = await db.query<{ total: string }>(`SELECT COUNT(*)::text AS total FROM stocks s JOIN exchanges e ON e.id = s.exchange_id WHERE ${where}`, shared);
     const total = Number(count.rows[0]?.total || 0);
     const result = await db.query(`
       SELECT s.id, s.symbol, s.display_symbol, s.provider_symbol, s.company_name AS name,
@@ -113,12 +159,12 @@ export class StockRepository {
       FROM stocks s JOIN exchanges e ON e.id = s.exchange_id
       WHERE ${where}
       ORDER BY CASE
-        WHEN UPPER(s.provider_symbol) = $2 OR UPPER(s.symbol) = $2 OR UPPER(s.display_symbol) = $2 THEN 0
-        WHEN UPPER(s.provider_symbol) LIKE $3 OR UPPER(s.symbol) LIKE $3 OR UPPER(s.display_symbol) LIKE $3 THEN 1
-        WHEN UPPER(s.company_name) LIKE $3 THEN 2 ELSE 3 END,
-        s.symbol, e.code, s.id
-      LIMIT $4 OFFSET $5
-    `, [contains, query, prefix, pageSize, (page - 1) * pageSize]);
+        WHEN UPPER(s.provider_symbol) = $4 OR UPPER(s.symbol) = $4 OR UPPER(s.display_symbol) = $4 OR UPPER(s.symbol) = $3 THEN 0
+        WHEN UPPER(s.provider_symbol) LIKE $5 OR UPPER(s.symbol) LIKE $5 OR UPPER(s.display_symbol) LIKE $5 THEN 1
+        WHEN UPPER(s.company_name) LIKE $5 THEN 2 ELSE 3 END,
+        ${featuredRank('$8')}, s.symbol, e.code, s.id
+      LIMIT $6 OFFSET $7
+    `, [...shared, query, prefix, pageSize, (page - 1) * pageSize, FEATURED_SYMBOLS]);
     return { items: result.rows, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
   }
 
@@ -158,7 +204,7 @@ export class StockRepository {
     addNumber('pm.annualized_volatility', filters.maxVolatility, '<=');
     if (filters.minRsi !== undefined || filters.maxRsi !== undefined || filters.minYearPosition !== undefined || filters.maxYearPosition !== undefined || filters.movingAverageRelation) clauses.push('FALSE');
     const sortColumns: Record<ScreenerFilters['sortBy'], string> = {
-      symbol: 's.symbol', name: 's.company_name', price: 'lp.close_price', marketCap: 'f.market_cap', peRatio: 'f.pe_ratio', eps: 'f.eps',
+      popular: 'NULL', symbol: 's.symbol', name: 's.company_name', price: 'lp.close_price', marketCap: 'f.market_cap', peRatio: 'f.pe_ratio', eps: 'f.eps',
       dividendYield: 'f.dividend_yield', revenue: 'f.revenue', profit: 'f.net_income', debt: 'f.total_debt', volume: 'lp.volume', volatility: 'pm.annualized_volatility', rsi14: 'NULL', yearPosition: 'NULL',
     };
     const where = clauses.join(' AND ');
@@ -180,6 +226,8 @@ export class StockRepository {
     const total = Number(count.rows[0]?.total || 0);
     params.push(limit, (page - 1) * limit);
     const order = filters.sortOrder === 'asc' ? 'ASC' : 'DESC';
+    // Postgres rejects a constant ORDER BY term, so sorts with no stored column fall straight through to the featured order.
+    const primarySort = sortColumns[filters.sortBy] === 'NULL' ? '' : `${sortColumns[filters.sortBy]} ${order} NULLS LAST, `;
     const result = await db.query(`
       ${ctes}
       SELECT s.*, e.code AS exchange_code, e.name AS exchange_name, e.country_code,
@@ -188,9 +236,9 @@ export class StockRepository {
              pm.annualized_volatility,
              f.source AS fundamentals_source, f.source_timestamp AS fundamentals_timestamp
       ${joins} WHERE ${where}
-      ORDER BY ${sortColumns[filters.sortBy]} ${order} NULLS LAST, s.symbol ASC, s.id ASC
+      ORDER BY ${primarySort}${featuredRank(`$${params.length + 1}`)}, s.symbol ASC, s.id ASC
       LIMIT $${params.length - 1} OFFSET $${params.length}
-    `, params);
+    `, [...params, FEATURED_SYMBOLS]);
     return { items: result.rows, page, limit, total, totalPages: Math.ceil(total / limit) };
   }
 

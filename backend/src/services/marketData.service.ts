@@ -39,7 +39,7 @@ export class MarketDataService {
     if (startDate && endDate) {
       try {
         const history = await YahooFinanceMarketDataProvider.getHistoryBetween(symbol, exchange, startDate, endDate);
-        await Promise.all(history.bars.map(bar => PriceHistoryRepository.savePriceBar(stockId, bar, history.provider, history.fetchedAt)));
+        if (!history.isStale) await PriceHistoryRepository.savePriceBars(stockId, history.bars, history.provider, history.fetchedAt);
         return history.bars;
       } catch (error) {
         const cached = await PriceHistoryRepository.getPrices(stockId, startDate, endDate);
@@ -60,7 +60,12 @@ export class MarketDataService {
     return (await YahooFinanceMarketDataProvider.getHistoryBetween(symbol, exchange, startDate, endDate)).bars;
   }
 
-  static async getChart(symbol: string, exchange: string | undefined, range: string, interval: string): Promise<MarketHistory> {
+  /**
+   * Provider chart for a range. When `stored` identifies the security, daily series are kept in price_history and,
+   * if the provider is unavailable (for example while it is rate limiting us), the stored closes are served instead,
+   * marked stale, so charts and comparisons keep working on the last observed data.
+   */
+  static async getChart(symbol: string, exchange: string | undefined, range: string, interval: string, stored?: { stockId: string | number; currency: string }): Promise<MarketHistory> {
     if (this.useTestFixtures()) {
       return {
         symbol, provider: 'FINSIGHT_TEST_FIXTURE', currency: exchange === 'NSE' ? 'INR' : 'USD', exchange: exchange || 'UNKNOWN',
@@ -68,7 +73,20 @@ export class MarketDataService {
         bars: MockMarketDataProvider.generateHistoricalPrices(symbol, range === '1d' ? 3 : 365), events: [],
       };
     }
-    return YahooFinanceMarketDataProvider.getHistory(symbol, exchange, range, interval);
+    const daily = interval === '1d' ? stored : undefined;
+    try {
+      const history = await YahooFinanceMarketDataProvider.getHistory(symbol, exchange, range, interval);
+      if (daily && !history.isStale) await PriceHistoryRepository.savePriceBars(daily.stockId, history.bars, history.provider, history.fetchedAt);
+      return history;
+    } catch (error) {
+      if (!daily) throw error;
+      const bars = await PriceHistoryRepository.getPrices(daily.stockId, rangeStart(range));
+      if (!bars.length) throw error;
+      return {
+        symbol, provider: 'FINSIGHT_STORED_HISTORY', currency: daily.currency, exchange: exchange || 'UNKNOWN',
+        range, interval, fetchedAt: new Date().toISOString(), isStale: true, adjusted: true, bars, events: [],
+      };
+    }
   }
 
   static async getProviderCorporateActions(symbol: string, exchange?: string): Promise<MarketHistory['events']> {
@@ -131,7 +149,7 @@ export class MarketDataService {
     const stock = await StockRepository.findById(stockId);
     if (!stock || !stock.is_active) throw new AppError('Security not found', 404, 'SECURITY_NOT_FOUND');
     const config = TECHNICAL_PERIODS[period];
-    const history = await this.getChart(stock.symbol, stock.exchange_code, config.range, config.interval);
+    const history = await this.getChart(stock.symbol, stock.exchange_code, config.range, config.interval, { stockId: stock.id, currency: stock.currency });
     return { security: securityIdentity(stock), period, provider: history.provider, fetchedAt: history.fetchedAt, isStale: history.isStale ?? false, ...calculateTechnicalAnalysis(history.bars) };
   }
 
@@ -139,17 +157,16 @@ export class MarketDataService {
     const securities = await Promise.all(securityIds.map(id => StockRepository.findById(id)));
     if (securities.some(stock => !stock || !stock.is_active)) throw new AppError('One or more securities were not found', 404, 'SECURITY_NOT_FOUND');
     const rows = await Promise.all(securities.map(async stock => {
-      const [quoteResult, dailyResult, maxResult] = await Promise.allSettled([
+      // Two provider requests per security (quote and five years of daily closes) keep a comparison of five
+      // securities inside the provider's request budget. The full-history return is not shown, so it is not fetched.
+      const [quoteResult, dailyResult] = await Promise.allSettled([
         this.getQuote(stock.symbol, stock.exchange_code),
-        this.getChart(stock.symbol, stock.exchange_code, '5y', '1d'),
-        this.getChart(stock.symbol, stock.exchange_code, 'max', '1wk'),
+        this.getChart(stock.symbol, stock.exchange_code, '5y', '1d', { stockId: stock.id, currency: stock.currency }),
       ]);
       const quote = quoteResult.status === 'fulfilled' ? quoteResult.value : null;
       const daily = dailyResult.status === 'fulfilled' ? dailyResult.value : null;
-      const maximum = maxResult.status === 'fulfilled' ? maxResult.value : null;
       const fundamentals = quote ? await this.getStockFundamentals(stock.symbol, stock.id, quote) : emptyFundamentals();
       const dailyBars = daily?.bars ?? [];
-      const maxBars = maximum?.bars ?? dailyBars;
       const closes = dailyBars.map(item => Number(item.adjusted_close ?? item.close));
       const technicals = calculateTechnicalAnalysis(dailyBars);
       return {
@@ -161,7 +178,7 @@ export class MarketDataService {
           YTD: yearToDateReturn(dailyBars),
           '1Y': periodReturn(dailyBars, 366),
           '5Y': seriesReturn(dailyBars),
-          MAX: seriesReturn(maxBars),
+          MAX: null,
         },
         risk: { volatility: annualizedVolatility(closes), maxDrawdown: maximumDrawdown(closes) },
         technicals: technicals.summary,
@@ -169,7 +186,8 @@ export class MarketDataService {
         availability: { quote: quote ? 'AVAILABLE' : 'UNAVAILABLE', fundamentals: fundamentals.source === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'AVAILABLE', history: daily ? 'AVAILABLE' : 'UNAVAILABLE' },
       };
     }));
-    const commonDates = intersectDates(rows.map(row => row.normalizedSeries.map(point => point.date)));
+    // A security whose history could not be loaded is left out of the date intersection, so it does not blank the others.
+    const commonDates = intersectDates(rows.filter(row => row.normalizedSeries.length).map(row => row.normalizedSeries.map(point => point.date)));
     return {
       securities: rows.map(row => ({ ...row, normalizedSeries: rebaseSeries(row.normalizedSeries.filter(point => commonDates.has(point.date))) })),
       methodology: 'Performance is calculated from adjusted provider closes. The normalized chart is rebased to 100 over dates common to every selected security. Missing provider data remains unavailable.',
@@ -204,7 +222,7 @@ export class MarketDataService {
     const list = this.useTestFixtures() ? await StockRepository.list({
       exchange: filters.exchange, country: filters.country, sector: filters.sector,
       page: filters.page, limit: filters.limit,
-      sortBy: filters.sortBy === 'name' ? 'company' : 'symbol', sortOrder: filters.sortOrder,
+      sortBy: ({ name: 'company', popular: 'popular' } as const)[filters.sortBy as 'name' | 'popular'] ?? 'symbol', sortOrder: filters.sortOrder,
     }) : await StockRepository.screen(filters);
     const rows = await Promise.all(list.items.map(async stock => {
       const base = {
@@ -240,6 +258,19 @@ export class MarketDataService {
     const testTotal = this.useTestFixtures() ? items.length : list.total;
     return { items, pagination: { page: list.page, limit: list.limit, total: testTotal, totalPages: this.useTestFixtures() ? Math.max(1, Math.ceil(testTotal / list.limit)) : list.totalPages }, sortScope: 'SERVER_RESULT_SET', unavailableMetricsExcluded: true };
   }
+}
+
+/** First calendar date a provider range covers, for reading the same window back from stored history. */
+function rangeStart(range: string): string | undefined {
+  const date = new Date();
+  if (range === 'ytd') return `${date.getUTCFullYear()}-01-01`;
+  const match = /^(\d+)(mo|y|d)$/.exec(range);
+  if (!match) return undefined;
+  const amount = Number(match[1]);
+  if (match[2] === 'y') date.setUTCFullYear(date.getUTCFullYear() - amount);
+  else if (match[2] === 'mo') date.setUTCMonth(date.getUTCMonth() - amount);
+  else date.setUTCDate(date.getUTCDate() - amount);
+  return date.toISOString().slice(0, 10);
 }
 
 const TECHNICAL_PERIODS = {
@@ -325,7 +356,7 @@ function matchesAvailableFilters(stock: Record<string, any>, filters: ScreenerFi
 }
 
 function sortVisibleRows<T extends Record<string, any>>(rows: T[], filters: ScreenerFilters): T[] {
-  if (filters.sortBy === 'symbol' || filters.sortBy === 'name') return rows;
+  if (filters.sortBy === 'symbol' || filters.sortBy === 'name' || filters.sortBy === 'popular') return rows;
   const field = ({ marketCap: 'marketCap', peRatio: 'peRatio', eps: 'eps', dividendYield: 'dividendYield', revenue: 'revenue', profit: 'profit', debt: 'debt', volume: 'volume', volatility: 'volatility', rsi14: 'rsi14', yearPosition: 'yearPosition', price: 'price' } as const)[filters.sortBy];
   const direction = filters.sortOrder === 'asc' ? 1 : -1;
   return rows.slice().sort((left, right) => {

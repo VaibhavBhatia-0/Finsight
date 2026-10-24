@@ -45,6 +45,34 @@ export class PriceHistoryRepository {
     return res.rows;
   }
 
+  /** Upserts a provider series in a few multi-row statements instead of one round trip per trading day. */
+  static async savePriceBars(stockId: string | number, bars: PriceBar[], source?: string, observedAt?: string): Promise<void> {
+    for (let start = 0; start < bars.length; start += 400) {
+      const chunk = bars.slice(start, start + 400);
+      const params: unknown[] = [];
+      const rows = chunk.map(bar => {
+        params.push(stockId, bar.date.slice(0, 10), bar.open, bar.high, bar.low, bar.close, bar.adjusted_close || bar.close, bar.volume, source || null, observedAt || null);
+        const offset = params.length - 10;
+        return `(${Array.from({ length: 10 }, (_, index) => `$${offset + index + 1}`).join(', ')})`;
+      });
+      // eslint-disable-next-line no-await-in-loop
+      await db.query(`
+        INSERT INTO price_history (
+          stock_id, trading_date, open_price, high_price, low_price, close_price, adjusted_close, volume, source, observed_at
+        ) VALUES ${rows.join(', ')}
+        ON CONFLICT (stock_id, trading_date) DO UPDATE
+        SET open_price = EXCLUDED.open_price,
+            high_price = EXCLUDED.high_price,
+            low_price = EXCLUDED.low_price,
+            close_price = EXCLUDED.close_price,
+            adjusted_close = EXCLUDED.adjusted_close,
+            volume = EXCLUDED.volume,
+            source = EXCLUDED.source,
+            observed_at = EXCLUDED.observed_at;
+      `, params);
+    }
+  }
+
   static async savePriceBar(stockId: string | number, bar: PriceBar, source?: string, observedAt?: string): Promise<void> {
     await db.query(`
       INSERT INTO price_history (

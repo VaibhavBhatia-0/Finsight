@@ -272,16 +272,29 @@ def simulate_portfolio(payload: Dict[str, Any]) -> Dict[str, Any]:
     else:
         xirr = calculate_xirr([(payload["start_date"], -(amount + amount * fee_rate)), (payload["end_date"], gross_value - gross_value * fee_rate - tax)])
         cagr = calculate_cagr(amount, gross_value - fees - tax, payload["start_date"], payload["end_date"])
-    metrics = {"cagr": cagr, "xirr": xirr, "volatility": None, "sharpe_ratio": None, "max_drawdown": None, "beta": None, "benchmark_return": None, "benchmark_difference": None}
     dates = sorted(set(row["date"] for item in component_results for row in item.get("performance_series", [])))
     component_maps = [{row["date"]: row["value"] for row in item.get("performance_series", [])} for item in component_results]
-    last_values = [0.0 for _ in component_maps]
+    last_values: List[Optional[float]] = [None for _ in component_maps]
     performance = []
     for current_date in dates:
         for index, values_by_date in enumerate(component_maps):
             if current_date in values_by_date:
                 last_values[index] = float(values_by_date[current_date])
-        performance.append({"date": current_date, "value": sum(last_values)})
+        # Markets keep different holiday calendars, so a holding is carried at its last close on days its exchange
+        # is shut, and the series starts only once every holding has traded (an untraded holding is not worth zero).
+        if all(value is not None for value in last_values):
+            performance.append({"date": current_date, "value": sum(value for value in last_values if value is not None)})
+    values = [row["value"] for row in performance]
+    # Without contributions the combined valuation is a pure return series, so risk is measured on it directly.
+    # Scheduled contributions would read as gains, so recurring portfolios keep these metrics empty.
+    measurable = not recurring and len(values) >= 3
+    metrics = {
+        "cagr": cagr, "xirr": xirr,
+        "volatility": calculate_volatility(values) if measurable else None,
+        "sharpe_ratio": calculate_sharpe_ratio(values, float(payload.get("risk_free_rate", 0.065))) if measurable else None,
+        "max_drawdown": calculate_max_drawdown(values) if measurable else None,
+        "beta": None, "benchmark_return": None, "benchmark_difference": None,
+    }
     output = result("PORTFOLIO_SCENARIO", invested, gross_value, dividends, fees, tax, asset_return, fx_impact, net_profit, metrics, {"asset_count": len(assets), "investment_mode": "RECURRING" if recurring else "LUMP_SUM"}, performance)
     output["assets"] = [{"symbol": asset.get("symbol"), "weight": weight, "result": item} for asset, weight, item in zip(assets, weights, component_results)]
     return output

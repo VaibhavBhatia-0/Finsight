@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { BarChart3, Loader2 } from 'lucide-react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
@@ -10,11 +11,15 @@ import { usePortfolios } from '../../hooks/usePortfolios';
 interface FormValues { portfolioId: string; startDate: string; endDate: string; amount: number; benchmarkSymbol: '' | '^NSEI' | '^BSESN' | '^GSPC' | '^IXIC'; feePercent: number; fixedFee: number }
 
 export default function LabBacktestPage() {
-  const { register, handleSubmit, reset } = useForm<FormValues>();
+  const { register, handleSubmit, reset, setValue } = useForm<FormValues>();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const palette = useChartPalette();
   const fit = useChartFit();
   const portfolios = usePortfolios();
+  const preselected = searchParams.get('portfolio');
+  // Arriving from Portfolio scenario selects that portfolio once the list (and so its option) has loaded.
+  useEffect(() => { if (preselected && portfolios.data?.some(item => String(item.portfolio.id) === preselected)) setValue('portfolioId', preselected); }, [portfolios.data, preselected, setValue]);
   const runBacktest = useRunBacktest();
   const [backtestId, setBacktestId] = useState<string | null>(null);
   const { data: result, isLoading, isError, error } = useBacktest(backtestId ?? '', Boolean(backtestId));

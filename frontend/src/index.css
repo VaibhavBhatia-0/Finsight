@@ -534,6 +534,8 @@ a.data-row:hover { border-color: var(--line-strong); }
 .diverging-row strong { font-size: .74rem; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
 
 .stock-search-field { position: relative; z-index: 8; }
+/* The field being typed in sits above the fields after it, so its suggestions are not hidden when fields stack on phones. */
+.stock-search-field:focus-within { z-index: 9; }
 .stock-search-control { position: relative; display: block; }
 .stock-search-control > svg { position: absolute; top: 50%; left: 14px; z-index: 2; color: var(--muted); transform: translateY(-42%); }
 .stock-search-control input { padding-right: 40px !important; padding-left: 42px !important; }
@@ -762,6 +764,27 @@ a.data-row:hover { border-color: var(--line-strong); }
   .auth-landing { padding-top: 14px; }
   .auth-pill { min-height: 42px; padding: 0 14px; font-size: .74rem; }
   .auth-card { border-radius: 24px; padding: 22px 18px; }
+}
+/* Portfolio scenario allocation editor */
+.scenario-source { width: fit-content; max-width: 100%; }
+.allocation-editor { display: grid; min-width: 0; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card-2); padding: 14px; }
+.allocation-editor-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text); font-size: .86rem; font-weight: 600; }
+.allocation-editor-head span:last-child { font-variant-numeric: tabular-nums; }
+.allocation-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px 42px; align-items: end; gap: 10px; }
+.allocation-fixed { display: grid; min-width: 0; min-height: 42px; align-content: center; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px 12px; }
+.allocation-fixed strong { color: var(--text); font-size: .88rem; }
+.allocation-fixed small { overflow: hidden; color: var(--muted); font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
+.allocation-weight { display: grid; gap: 4px; color: var(--text-2); font-size: .74rem; font-weight: 500; }
+.allocation-remove { width: 42px !important; height: 42px !important; }
+.allocation-remove:disabled { opacity: .35; }
+.allocation-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.app-content table.scenario-compare-table { min-width: 0; }
+@media (max-width: 520px) { .allocation-row { grid-template-columns: minmax(0, 1fr) 88px 42px; gap: 8px; } }
+
+/* Phone browsers zoom into any field whose text is under 16px and stay zoomed, which leaves the page wider than the
+   screen. Keeping form text at 16px on touch screens stops that zoom. */
+@media (pointer: coarse), (max-width: 640px) {
+  input:not([type='checkbox']):not([type='radio']), select, textarea { font-size: 16px !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   .auth-marquee-track { animation: none; }
