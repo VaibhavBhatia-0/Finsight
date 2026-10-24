@@ -3,39 +3,47 @@ import ReactECharts from 'echarts-for-react';
 import { Info, Save } from 'lucide-react';
 import type { PortfolioBenchmark, PortfolioIntelligence } from '../api/contracts';
 import { useUpdatePortfolio } from '../hooks/usePortfolios';
+import { areaFill, barFill, chartChrome, glowLine, trendColor, useChartPalette } from './chartTheme';
 
 export default function PortfolioIntelligencePanel({ data, benchmarks }: { data: PortfolioIntelligence; benchmarks: PortfolioBenchmark[] }) {
   const update = useUpdatePortfolio(data.portfolio.id);
   const [benchmarkId, setBenchmarkId] = useState(data.portfolio.benchmarkId == null ? '' : String(data.portfolio.benchmarkId));
   const [targets, setTargets] = useState<Record<string, number>>(data.portfolio.allocationTargets || {});
   const currency = data.portfolio.baseCurrency;
-  const performanceOption = useMemo(() => ({
-    animationDuration: 350,
-    tooltip: { trigger: 'axis' },
-    legend: { top: 0, textStyle: { color: '#a8a29e' } },
+  const palette = useChartPalette();
+  const performanceOption = useMemo(() => {
+    const chrome = chartChrome(palette);
+    const portfolioValues = data.performance?.series.map(row => row.portfolioNormalized) ?? [];
+    const portfolioColor = trendColor(palette, portfolioValues);
+    return {
+    ...chrome.base,
+    tooltip: chrome.tooltip,
+    legend: chrome.legend,
     grid: { left: 50, right: 22, top: 44, bottom: 36 },
-    xAxis: { type: 'category', data: data.performance?.series.map(row => row.date) ?? [], axisLabel: { color: '#8c8881', hideOverlap: true }, axisLine: { lineStyle: { color: '#3b3935' } } },
-    yAxis: { type: 'value', name: 'Rebased to 100', nameTextStyle: { color: '#8c8881' }, axisLabel: { color: '#8c8881' }, splitLine: { lineStyle: { color: 'rgba(140,136,129,.14)' } } },
+    xAxis: { type: 'category', data: data.performance?.series.map(row => row.date) ?? [], axisLabel: chrome.axisLabel, axisLine: chrome.axisLine },
+    yAxis: { type: 'value', name: 'Rebased to 100', nameTextStyle: { color: palette.text }, axisLabel: chrome.axisLabel, splitLine: chrome.splitLine },
     series: [
-      { name: data.portfolio.name, type: 'line', showSymbol: false, smooth: false, data: data.performance?.series.map(row => row.portfolioNormalized) ?? [], lineStyle: { width: 2, color: '#d6b978' }, areaStyle: { color: 'rgba(214,185,120,.08)' } },
-      ...(data.performance?.benchmark ? [{ name: data.performance.benchmark.name, type: 'line', showSymbol: false, smooth: false, data: data.performance.series.map(row => row.benchmarkNormalized), lineStyle: { width: 1.5, color: '#8b9a83', type: 'dashed' } }] : []),
+      { name: data.portfolio.name, type: 'line', showSymbol: false, smooth: .3, data: portfolioValues, itemStyle: { color: portfolioColor }, lineStyle: glowLine(portfolioColor), areaStyle: areaFill(portfolioColor) },
+      ...(data.performance?.benchmark ? [{ name: data.performance.benchmark.name, type: 'line', showSymbol: false, smooth: .3, data: data.performance.series.map(row => row.benchmarkNormalized), itemStyle: { color: palette.trend }, lineStyle: { width: 1.6, color: palette.trend, type: 'dashed' } }] : []),
     ],
-  }), [data]);
+  };
+  }, [data, palette]);
   const allocationOption = useMemo(() => {
     const rows = data.allocation.holdings.filter(row => row.value > 0);
+    const chrome = chartChrome(palette);
     return {
-      animationDuration: 300,
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      legend: { top: 0, textStyle: { color: '#a8a29e' } },
+      ...chrome.base,
+      tooltip: { ...chrome.tooltip, axisPointer: { type: 'shadow' } },
+      legend: chrome.legend,
       grid: { left: 88, right: 28, top: 40, bottom: 24 },
-      xAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%', color: '#8c8881' }, splitLine: { lineStyle: { color: 'rgba(140,136,129,.14)' } } },
-      yAxis: { type: 'category', data: rows.map(row => row.symbol), axisLabel: { color: '#d6d3cd' }, axisLine: { show: false } },
+      xAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%', color: palette.text }, splitLine: chrome.splitLine },
+      yAxis: { type: 'category', data: rows.map(row => row.symbol), axisLabel: { color: palette.strong }, axisLine: { show: false } },
       series: [
-        { name: 'Current', type: 'bar', data: rows.map(row => row.percentage), itemStyle: { color: '#d6b978', borderRadius: [0, 3, 3, 0] }, barMaxWidth: 12 },
-        { name: 'Target', type: 'bar', data: rows.map(row => row.targetPercentage), itemStyle: { color: '#6f746b', borderRadius: [0, 3, 3, 0] }, barMaxWidth: 8 },
+        { name: 'Current', type: 'bar', data: rows.map(row => row.percentage), itemStyle: barFill(palette.series[0], true), barMaxWidth: 10, barGap: '60%' },
+        { name: 'Target', type: 'bar', data: rows.map(row => row.targetPercentage), itemStyle: barFill(palette.series[1], true), barMaxWidth: 10 },
       ],
     };
-  }, [data]);
+  }, [data, palette]);
 
   if (!data.performance) return <section className="panel"><div className="empty-state"><p>{data.reason || 'Add dated portfolio transactions to calculate intelligence.'}</p></div></section>;
   const performance = data.performance;

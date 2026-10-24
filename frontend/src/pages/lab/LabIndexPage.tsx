@@ -13,7 +13,7 @@ export default function LabIndexPage() {
     <main className="lab-index-page">
       <header className="page-heading">
         <div><p className="page-eyebrow">Research sandbox</p><h1>FinSight Lab</h1><p className="page-subtitle">Explore historical what-if questions with explicit assumptions. Scenario simulation and strategy backtesting remain separate workflows.</p></div>
-        <FlaskConical size={30} className="text-gold-400" aria-hidden />
+        <FlaskConical size={30} className="text-accent-400" aria-hidden />
       </header>
 
       <section className="mb-8">

@@ -1,6 +1,5 @@
 import { FormEvent, useState } from 'react';
 import { Spinner } from '../../components/Spinner';
-import FinanceNav from '../../components/FinanceNav';
 import { useUserPreferences } from '../../context/UserPreferencesContext';
 import { useCreateFinanceTransaction, useCreateRecurringRule, useDeactivateRecurringRule, useDeleteFinanceTransaction, useFinanceTransactions, useRecurringRules } from '../../hooks/useFinanceTransactions';
 
@@ -41,7 +40,6 @@ export default function FinanceTransactionsPage() {
 
   return <main>
     <header className="page-heading"><div><p className="page-eyebrow">Personal finance</p><h1>Transactions</h1><p className="page-subtitle">A chronological ledger for income, expenses, transfers, and recurring rules.</p></div></header>
-    <FinanceNav />
     <form onSubmit={submit} className="panel my-6 grid gap-3 rounded border p-4 sm:grid-cols-2">
       <select name="transactionType" aria-label="Transaction type" className="rounded border px-3 py-2"><option value="EXPENSE">Expense</option><option value="INCOME">Income</option><option value="TRANSFER">Transfer</option></select>
       <input name="category" required maxLength={100} placeholder="Category" className="rounded border px-3 py-2" />
@@ -52,7 +50,7 @@ export default function FinanceTransactionsPage() {
       {recurring && <><select name="frequency" aria-label="Frequency" className="rounded border px-3 py-2"><option value="MONTHLY">Monthly</option><option value="WEEKLY">Weekly</option><option value="QUARTERLY">Quarterly</option><option value="ANNUALLY">Annually</option></select><label className="text-sm">End date (optional)<input name="endDate" type="date" className="mt-1 block w-full rounded border px-3 py-2" /></label></>}
       <input name="description" maxLength={500} placeholder="Description" className="rounded border px-3 py-2" />
       <input name="notes" maxLength={1000} placeholder="Notes" className="rounded border px-3 py-2" />
-      <button disabled={createTransaction.isPending || createRule.isPending} className="rounded bg-gold-600 px-4 py-2 text-white sm:col-span-2">{createTransaction.isPending || createRule.isPending ? 'Saving…' : recurring ? 'Create recurring rule' : 'Add transaction'}</button>
+      <button disabled={createTransaction.isPending || createRule.isPending} className="rounded bg-accent-600 px-4 py-2 text-white sm:col-span-2">{createTransaction.isPending || createRule.isPending ? 'Saving…' : recurring ? 'Create recurring rule' : 'Add transaction'}</button>
       {(createTransaction.error || createRule.error) && <p className="text-red-600 sm:col-span-2">{(createTransaction.error || createRule.error)?.message}</p>}
     </form>
     <section className="panel mb-4"><div className="panel-header"><div><h2 className="panel-title">Recurring rules</h2><p className="panel-subtitle">Scheduled ledger entries materialize once per due date.</p></div></div>{rules.data?.length ? <div className="data-list">{rules.data.map(rule => <div key={rule.id} className="data-row"><span><strong>{rule.category}</strong><span className="ml-2 text-sm text-gray-500">{rule.transaction_type} · {rule.currency} {Number(rule.amount).toLocaleString()} · {rule.frequency} · {rule.active ? 'Active' : 'Inactive'}</span></span>{rule.active && <button onClick={() => deactivateRule.mutate(rule.id)} disabled={deactivateRule.isPending} className="text-sm text-red-600">Stop</button>}</div>)}</div> : <div className="empty-state"><p>No recurring rules.</p></div>}</section>

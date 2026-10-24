@@ -7,6 +7,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { UserPreferencesProvider } from './context/UserPreferencesContext';
 import AppRoutes from './routes/AppRoutes';
+import LiquidBackdrop from './components/LiquidBackdrop';
 import { createQueryClient } from './queryClient';
 
 import './index.css'; // Tailwind import
@@ -23,6 +24,7 @@ root.render(
         <AuthProvider>
           <UserPreferencesProvider>
             <ThemeProvider>
+              <LiquidBackdrop />
               <AppRoutes />
             </ThemeProvider>
           </UserPreferencesProvider>

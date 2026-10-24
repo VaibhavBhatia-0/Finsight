@@ -30,7 +30,7 @@ export default function PortfolioListPage() {
       <div className="flex items-start justify-between"><span className="portfolio-icon"><BriefcaseBusiness size={19} /></span><ArrowUpRight size={16} className="text-gray-500" /></div>
       <div><p className="portfolio-label">{value.portfolio.name}</p><p className="portfolio-value">{format(value.summary.totalValue, value.portfolio.baseCurrency)}</p></div>
       <div className="portfolio-footer"><span>{value.portfolio.baseCurrency} base</span><span className={value.summary.totalReturnAmount >= 0 ? 'movement-up' : 'movement-down'}>{value.summary.totalReturnPercentage >= 0 ? '+' : ''}{value.summary.totalReturnPercentage.toFixed(2)}%</span></div>
-    </Link>)}</div> : !query.isPending && <div className="empty-state"><BriefcaseBusiness className="mx-auto mb-3 text-gold-400" /><p>Create a portfolio to begin a chronological investment ledger.</p></div>}
+    </Link>)}</div> : !query.isPending && <div className="empty-state"><BriefcaseBusiness className="mx-auto mb-3 text-accent-400" /><p>Create a portfolio to begin a chronological investment ledger.</p></div>}
   </main>;
 }
 

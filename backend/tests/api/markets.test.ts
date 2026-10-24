@@ -155,6 +155,15 @@ describe('Markets & FX API Integration Tests (/api/v1/markets)', () => {
     expect(firstData.data.items[0]).not.toHaveProperty('quote');
   });
 
+  it('8b. GET /api/v1/markets/securities/stats lists listed sectors for screener suggestions', async () => {
+    const response = await fetch(`${baseUrl}/api/v1/markets/securities/stats`);
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    const technology = body.data.sectors.find((row: any) => row.sector === 'Technology');
+    expect(technology.count).toBeGreaterThanOrEqual(12);
+    expect(body.data.sectors.every((row: any) => typeof row.sector === 'string' && row.sector.trim())).toBe(true);
+  });
+
   it('9. supports ticker, company, partial, exchange, country, and no-result security searches', async () => {
     const ticker = await (await fetch(`${baseUrl}/api/v1/markets/securities/search?q=ZZ11&page=1&pageSize=20`)).json();
     const company = await (await fetch(`${baseUrl}/api/v1/markets/securities/search?q=Zenith%20Test%20Company%2011&page=1&pageSize=20`)).json();

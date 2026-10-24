@@ -16,7 +16,7 @@ export default function RecurringInvestmentPage() {
     await runScenario.mutateAsync(request); setLastRequest(request);
   };
   return <main className="scenario-page">
-    <header className="page-heading"><div><p className="page-eyebrow">FinSight Lab · Scenario engine</p><h1>Recurring investment</h1><p className="page-subtitle">Model DCA contributions as individual dated cash flows with a dedicated recurring execution path.</p></div><Repeat2 size={30} className="text-gold-400" /></header>
+    <header className="page-heading"><div><p className="page-eyebrow">FinSight Lab · Scenario engine</p><h1>Recurring investment</h1><p className="page-subtitle">Model DCA contributions as individual dated cash flows with a dedicated recurring execution path.</p></div><Repeat2 size={30} className="text-accent-400" /></header>
     <form onSubmit={handleSubmit(submit)} className="panel scenario-form space-y-4"><div className="panel-header"><div><h2 className="panel-title">Contribution schedule</h2><p className="panel-subtitle">Each occurrence is retained for XIRR</p></div><span className="freshness-badge">Provider history</span></div>
       <Controller name="asset" control={control} rules={{ required: true }} render={({ field }) => <StockSearchInput label="Asset" value={field.value ?? ''} onChange={field.onChange} onBlur={field.onBlur} />} />
       <div className="grid grid-cols-2 gap-4"><label className="block text-sm font-medium">Start date<input type="date" {...register('startDate', { required: true })} className="mt-1 w-full px-3 py-2" /></label><label className="block text-sm font-medium">End date<input type="date" {...register('endDate', { required: true })} className="mt-1 w-full px-3 py-2" /></label></div>

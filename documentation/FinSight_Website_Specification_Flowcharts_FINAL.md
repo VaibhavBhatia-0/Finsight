@@ -446,6 +446,58 @@ an input to FinSight Lab without providing investment recommendations.
 
 ## Visual System
 
+> **As implemented (24 October 2026):** the interface follows dashboard
+> and chart references the owner chose, which supersede the list below.
+>
+> -   **Liquid glass:** behind every page, `LiquidBackdrop` paints slowly
+>     flowing folds of glossy liquid on a canvas. In dark mode it is black
+>     satin with silver highlights travelling along the crests. In light
+>     mode it is warm beige satin with sand-toned glass; there is no
+>     white glare.
+>     -   **Glass:** cards, tabs and buttons are translucent and blur the
+>         liquid behind them (`backdrop-filter`), with a lit top edge and
+>         a soft sheen. Menus stay solid for legibility.
+>     -   **Cost:** the canvas runs at 0.4 resolution and 24 fps (about
+>         6 ms a frame at 1080p), pauses with the tab, and holds still
+>         under reduced motion.
+>     -   **Type and shape:** large (20–26px) radii, DM Sans,
+>         light-weight figures, pill tabs and switches with a solid
+>         active pill.
+> -   **Colour:** glossy green (`#3DF5A7`) and red (`#FF5277`) for gains
+>     and losses, used on text, change pills, volume bars and price
+>     lines; data series in electric blue, magenta, violet, cyan and
+>     amber; a lavender gloss gradient for primary buttons.
+> -   **Charts:** smooth curves with a glow and a gradient fill fading to
+>     transparent; thin glossy bars with rounded tops; dashed benchmark
+>     lines; dashed grid; frosted tooltips. Charts animate in (bars grow,
+>     lines draw, points fade in) and respect reduced-motion settings. A
+>     price or value line is green when the period ends higher and red
+>     when it ends lower.
+>
+> -   **Sign-in landing** (`AuthShell`, shared by sign-in, register and the
+>     password pages) follows an editorial sports-site layout:
+>     -   **Top bar:** the logo, an "Explore markets" pill and a light/dark
+>         toggle.
+>     -   **Headline:** a giant condensed headline (Anton) with serif accent
+>         words (Instrument Serif) in the accent colour and an animated
+>         signature scribble.
+>     -   **Columns:** public links on the left and NSE/BSE/NYSE/NASDAQ
+>         coverage on the right.
+>     -   **Card and strip:** the sign-in glass card centred against the
+>         headline, and a scrolling strip of the analytics and freshness
+>         labels.
+>
+>     On phones the columns move below the card.
+> -   **Stock detail:** the corporate-action timeline matches the
+>     fundamentals card's height and scrolls inside its panel (420px
+>     window when stacked on phones).
+>
+> Tokens live in `frontend/src/index.css`, ECharts styling in
+> `frontend/src/components/chartTheme.ts`, and the backdrop in
+> `frontend/src/components/LiquidBackdrop.tsx`.
+
+Original direction:
+
 -   Classy, elegant, luxurious, financial-terminal quality.
 -   Charcoal/black dark foundation.
 -   Champagne/gold accent.
@@ -476,7 +528,15 @@ End-of-day, or Historical.
 This section is authoritative where earlier flowcharts use older
 terminology or omit newly locked flows.
 
-## Navigation --- As Implemented (22 October 2026)
+## Navigation --- As Implemented (24 October 2026)
+
+There is no sidebar. A header holds the logo, five pill tabs (Overview,
+Invest, Lab, Money, Analyze), an expanding search button, the theme
+toggle and a user menu (Settings, Log out). The active group's pages
+appear as a second row of pills; the longest matching path is
+highlighted, so a stock page highlights Markets. The header is sticky
+from 1100px wide; below that the tabs move to their own scrollable row
+and the header scrolls away.
 
 ``` text
 OVERVIEW
@@ -506,7 +566,7 @@ ANALYZE
 ├── Backtesting
 └── Reports
 
-Settings
+Settings          (user menu)
 ```
 
 This supersedes the earlier locked navigation, which listed Expenses,
@@ -578,6 +638,28 @@ Open Stock Detail OR Add to Watchlist
 
 Advanced custom formulas, saved screeners, alerts, and complex filter
 groups are later extensions.
+
+**As implemented (24 October 2026) --- beginner-first screener.** The
+page shows only what returns results with today's data:
+
+-   "Find a stock" search with live suggestions, plus popular-stock
+    shortcuts.
+-   Market chips built from `GET /markets/securities/stats` with listing
+    counts, Indian exchanges first.
+-   A sector box suggesting only sectors that have listings, labelled
+    with its real coverage (the NSE and Nasdaq Trader directories carry
+    no sectors, so only seeded listings have one).
+-   A plain-language sort.
+-   "More filters" holding price range and maximum volatility, which use
+    stored price history.
+-   Results show stock, market, price in its own currency, a green/red
+    daily change pill and the freshness label.
+
+Valuation filters (P/E, EPS, market cap, revenue, profit, debt) and RSI,
+52-week position and moving-average filters stay supported by the API
+but are hidden. The first set needs a fundamentals provider. The second
+is not computed in the production SQL path, so it would always return
+nothing. The Markets page uses the same chips and a single search box.
 
 ## Portfolio UX
 

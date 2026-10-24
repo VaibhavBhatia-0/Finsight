@@ -2,37 +2,38 @@ import { type FormEvent, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { ArrowLeft, Scale } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { chartChrome, glowLine, useChartPalette } from '../components/chartTheme';
 import { Spinner } from '../components/Spinner';
 import { useComparePortfolios, usePortfolios } from '../hooks/usePortfolios';
-
-const colors = ['#d6b978', '#8b9a83', '#a58b78', '#c9c5bd'];
 
 export default function PortfolioComparePage() {
   const portfolios = usePortfolios();
   const compare = useComparePortfolios();
+  const palette = useChartPalette();
   const option = useMemo(() => {
+    const chrome = chartChrome(palette);
     const dates = [...new Set(compare.data?.comparisonSeries.flatMap(item => item.values.map(row => row.date)) ?? [])].sort();
     return {
-      animationDuration: 350,
-      tooltip: { trigger: 'axis' },
-      legend: { top: 0, textStyle: { color: '#a8a29e' } },
+      ...chrome.base,
+      tooltip: chrome.tooltip,
+      legend: chrome.legend,
       grid: { left: 48, right: 22, top: 48, bottom: 34 },
-      xAxis: { type: 'category', data: dates, axisLabel: { color: '#8c8881', hideOverlap: true }, axisLine: { lineStyle: { color: '#3b3935' } } },
-      yAxis: { type: 'value', name: 'Rebased to 100', nameTextStyle: { color: '#8c8881' }, axisLabel: { color: '#8c8881' }, splitLine: { lineStyle: { color: 'rgba(140,136,129,.14)' } } },
+      xAxis: { type: 'category', data: dates, axisLabel: chrome.axisLabel, axisLine: chrome.axisLine },
+      yAxis: { type: 'value', name: 'Rebased to 100', nameTextStyle: { color: palette.text }, axisLabel: chrome.axisLabel, splitLine: chrome.splitLine },
       series: compare.data?.comparisonSeries.map((item, index) => {
         const values = new Map(item.values.map(row => [row.date, row.value]));
-        return { name: item.name, type: 'line', showSymbol: false, data: dates.map(date => values.get(date) ?? null), connectNulls: false, lineStyle: { width: 2, color: colors[index] } };
+        return { name: item.name, type: 'line', showSymbol: false, data: dates.map(date => values.get(date) ?? null), connectNulls: false, smooth: .3, itemStyle: { color: palette.series[index % palette.series.length] }, lineStyle: glowLine(palette.series[index % palette.series.length]) };
       }) ?? [],
     };
-  }, [compare.data]);
+  }, [compare.data, palette]);
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const ids = new FormData(event.currentTarget).getAll('portfolioIds') as string[];
     compare.mutate(ids);
   };
   return <main>
-    <Link to="/portfolios" className="mb-5 inline-flex items-center gap-2 text-sm text-gold-300"><ArrowLeft size={15} /> Portfolios</Link>
-    <header className="page-heading"><div><p className="page-eyebrow">Portfolio intelligence</p><h1>Compare portfolios</h1><p className="page-subtitle">Factual comparison over the common available period. Differences in currency, benchmark, and history remain explicit.</p></div><Scale size={30} className="text-gold-400" /></header>
+    <Link to="/portfolios" className="mb-5 inline-flex items-center gap-2 text-sm text-accent-300"><ArrowLeft size={15} /> Portfolios</Link>
+    <header className="page-heading"><div><p className="page-eyebrow">Portfolio intelligence</p><h1>Compare portfolios</h1><p className="page-subtitle">Factual comparison over the common available period. Differences in currency, benchmark, and history remain explicit.</p></div><Scale size={30} className="text-accent-400" /></header>
     <form onSubmit={submit} className="panel mb-5"><fieldset><legend className="panel-title mb-3">Select two to four portfolios</legend><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{portfolios.data?.map(item => <label key={item.portfolio.id} className="selection-row"><input name="portfolioIds" type="checkbox" value={item.portfolio.id} /><span><strong>{item.portfolio.name}</strong><small>{item.portfolio.baseCurrency} · {item.portfolio.benchmarkName ?? 'No benchmark'}</small></span></label>)}</div></fieldset><button disabled={compare.isPending || portfolios.isPending} className="btn-primary mt-4 px-4 py-2">{compare.isPending ? 'Calculating…' : 'Compare selected portfolios'}</button>{compare.error && <p className="error-banner mt-3" role="alert">{compare.error.message}</p>}</form>
     {portfolios.isPending && <Spinner />}
     {compare.data && <div className="content-stack">

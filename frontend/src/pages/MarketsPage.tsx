@@ -9,18 +9,23 @@ import FreshnessBadge from '../components/FreshnessBadge';
 import { IndexPerformanceChart, MarketMoversChart } from '../components/MarketInsightCharts';
 import StockAnalyticsPanel from '../components/StockAnalyticsPanel';
 import { Spinner } from '../components/Spinner';
-import StockSearchInput from '../components/StockSearchInput';
 import { useAuth } from '../hooks/useAuth';
 import { useWatchlist } from '../hooks/useWatchlist';
+
+const marketChoices = [
+  { value: '', label: 'All markets' },
+  { value: 'NSE', label: 'NSE · India' },
+  { value: 'BSE', label: 'BSE · India' },
+  { value: 'NYSE', label: 'NYSE · US' },
+  { value: 'NASDAQ', label: 'NASDAQ · US' },
+];
 
 export default function MarketsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState(searchParams.get('q') ?? '');
-  const [securityJump, setSecurityJump] = useState('');
   const deferredSearch = useDeferredValue(search.trim());
-  const [country, setCountry] = useState('');
   const [exchange, setExchange] = useState('');
   const [sector, setSector] = useState('');
   const [sortBy, setSortBy] = useState<'symbol' | 'company' | 'price' | 'change' | 'volume'>('symbol');
@@ -32,8 +37,8 @@ export default function MarketsPage() {
 
   useEffect(() => setSearch(searchParams.get('q') ?? ''), [searchParams]);
   const stocks = useQuery({
-    queryKey: ['markets', deferredSearch, country, exchange, sector, page, pageSize, sortBy],
-    queryFn: async () => (await api.get<MarketStocksResponse>(endpoints.markets.stocks, { params: { q: deferredSearch || undefined, country: country || undefined, exchange: exchange || undefined, sector: sector || undefined, page, limit: pageSize, sortBy: sortBy === 'company' ? 'company' : 'symbol' } })).data,
+    queryKey: ['markets', deferredSearch, exchange, sector, page, pageSize, sortBy],
+    queryFn: async () => (await api.get<MarketStocksResponse>(endpoints.markets.stocks, { params: { q: deferredSearch || undefined, exchange: exchange || undefined, sector: sector || undefined, page, limit: pageSize, sortBy: sortBy === 'company' ? 'company' : 'symbol' } })).data,
     staleTime: 30_000,
   });
   const overview = useQuery({ queryKey: ['markets-overview'], queryFn: async () => (await api.get<MarketOverview>(endpoints.markets.overview)).data, staleTime: 30_000, refetchInterval: query => query.state.status === 'error' ? false : 60_000 });
@@ -68,18 +73,21 @@ export default function MarketsPage() {
       </header>
 
       <section className="panel mb-4">
-        <div className="mb-4 max-w-xl"><StockSearchInput label="Open a listed security" value={securityJump} onChange={setSecurityJump} onSelect={security => { if (security) navigate(`/markets/${security.id}`); }} /></div>
         <div className="market-search-row">
-          <label className="market-search"><Search size={18} aria-hidden /><span className="sr-only">Search markets</span><input value={search} onChange={event => { const value = event.target.value; setSearch(value); resetPage(); setSearchParams(value ? { q: value } : {}, { replace: true }); }} placeholder="Ticker or company" /></label>
+          <label className="market-search"><Search size={18} aria-hidden /><span className="sr-only">Search markets</span><input value={search} onChange={event => { const value = event.target.value; setSearch(value); resetPage(); setSearchParams(value ? { q: value } : {}, { replace: true }); }} placeholder="Search by ticker or company, e.g. TCS or Apple" /></label>
           <div className="market-display-controls"><label>Display prices<select value={displayCurrency} onChange={event => setDisplayCurrency(event.target.value)}><option value="NATIVE">Native currency</option><option value="INR">INR</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option></select></label><FreshnessBadge freshness={freshness} /></div>
         </div>
-        <div className="market-filter-row">
-          <label>Country<select value={country} onChange={event => { setCountry(event.target.value); setExchange(''); resetPage(); }}><option value="">All</option><option value="IN">India</option><option value="US">United States</option></select></label>
-          <label>Exchange<select value={exchange} onChange={event => { setExchange(event.target.value); resetPage(); }}><option value="">All</option><option value="NSE">NSE</option><option value="BSE">BSE · limited listings</option><option value="NASDAQ">NASDAQ</option><option value="NYSE">NYSE</option></select></label>
-          <label>Sector<input value={sector} onChange={event => { setSector(event.target.value); resetPage(); }} placeholder="e.g. Technology" /></label>
-          <label>Sort<select value={sortBy} onChange={event => { setSortBy(event.target.value as typeof sortBy); resetPage(); }}><option value="symbol">Symbol</option><option value="company">Company</option><option value="price">Visible-page price</option><option value="change">Visible-page change</option><option value="volume">Visible-page volume</option></select></label>
-          <label>Rows<select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); resetPage(); }}><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></label>
+        <div className="chip-row mt-4" role="group" aria-label="Market">
+          {marketChoices.map(choice => <button type="button" key={choice.value} className={`chip${exchange === choice.value ? ' active' : ''}`} aria-pressed={exchange === choice.value} onClick={() => { setExchange(choice.value); resetPage(); }}>{choice.label}</button>)}
         </div>
+        <details className="screener-more">
+          <summary>More options</summary>
+          <div className="market-filter-row">
+            <label>Sector<input value={sector} onChange={event => { setSector(event.target.value); resetPage(); }} placeholder="e.g. Technology" /></label>
+            <label>Sort<select value={sortBy} onChange={event => { setSortBy(event.target.value as typeof sortBy); resetPage(); }}><option value="symbol">Symbol</option><option value="company">Company</option><option value="price">Visible-page price</option><option value="change">Visible-page change</option><option value="volume">Visible-page volume</option></select></label>
+            <label>Rows<select value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); resetPage(); }}><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></label>
+          </div>
+        </details>
       </section>
 
       <div className="market-analytics-grid mb-4">

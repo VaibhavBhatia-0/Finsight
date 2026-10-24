@@ -1,4 +1,6 @@
+import type { CSSProperties } from 'react';
 import type { PortfolioHolding } from '../api/contracts';
+import { smoothPath, useChartPalette } from './chartTheme';
 
 const chartWidth = 760;
 const chartHeight = 300;
@@ -17,25 +19,30 @@ export function PositionPerformanceChart({ holdings }: { holdings: PortfolioHold
   const maxReturn = Math.max(0, ...returns);
   const returnRange = Math.max(1, maxReturn - minReturn);
   const returnY = (value: number) => plot.top + (maxReturn - value) / returnRange * innerHeight;
-  const points = rows.map((row, index) => `${plot.left + slot * index + slot / 2},${returnY(row.unrealizedPnLPct)}`).join(' ');
+  const points = rows.map((row, index) => ({ x: plot.left + slot * index + slot / 2, y: returnY(row.unrealizedPnLPct) }));
+  const curve = smoothPath(points);
+  const baseline = plot.top + innerHeight;
+  const area = `${curve} L ${points[points.length - 1].x} ${baseline} L ${points[0].x} ${baseline} Z`;
+  const barWidth = Math.min(22, slot * .34);
 
   return (
     <div className="native-chart" role="img" aria-label="Position allocation weights and unrealized returns">
       <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
         <defs>
-          <linearGradient id="return-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#9b8cff" stopOpacity=".24" /><stop offset="1" stopColor="#9b8cff" stopOpacity="0" /></linearGradient>
-          <filter id="line-glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+          <linearGradient id="bar-gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" className="stop-s1" /><stop offset="1" className="stop-s3" stopOpacity=".18" /></linearGradient>
+          <linearGradient id="return-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" className="stop-s2" stopOpacity=".32" /><stop offset="1" className="stop-s2" stopOpacity="0" /></linearGradient>
+          <filter id="line-glow" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
         </defs>
         {[0, 0.25, 0.5, 0.75, 1].map(tick => { const y = plot.top + tick * innerHeight; return <line key={tick} x1={plot.left} x2={chartWidth - plot.right} y1={y} y2={y} className="chart-grid-line" />; })}
         <line x1={plot.left} x2={chartWidth - plot.right} y1={returnY(0)} y2={returnY(0)} className="chart-zero-line" />
         {rows.map((row, index) => {
           const barHeight = Math.max(2, row.weight / maxWeight * innerHeight * .78);
-          const x = plot.left + slot * index + slot * .22;
-          return <g key={row.stockId} className="chart-position"><rect x={x} y={plot.top + innerHeight - barHeight} width={slot * .56} height={barHeight} rx="7" className="chart-bar"><title>{row.symbol}: {row.weight.toFixed(2)}% allocation</title></rect><text x={plot.left + slot * index + slot / 2} y={chartHeight - 15} textAnchor="middle" className="chart-axis-label">{row.symbol}</text></g>;
+          const x = plot.left + slot * index + slot / 2 - barWidth / 2;
+          return <g key={row.stockId} className="chart-position"><rect x={x} y={baseline - barHeight} width={barWidth} height={barHeight} rx={Math.min(7, barWidth / 2)} className="chart-bar" style={{ '--i': index } as CSSProperties}><title>{row.symbol}: {row.weight.toFixed(2)}% allocation</title></rect><text x={plot.left + slot * index + slot / 2} y={chartHeight - 15} textAnchor="middle" className="chart-axis-label">{row.symbol}</text></g>;
         })}
-        <polygon points={`${plot.left + slot / 2},${plot.top + innerHeight} ${points} ${plot.left + slot * (rows.length - 1) + slot / 2},${plot.top + innerHeight}`} fill="url(#return-area)" />
-        <polyline points={points} className="chart-return-line" filter="url(#line-glow)" />
-        {rows.map((row, index) => <circle key={row.stockId} cx={plot.left + slot * index + slot / 2} cy={returnY(row.unrealizedPnLPct)} r="4" className={row.unrealizedPnLPct < 0 ? 'chart-point negative' : 'chart-point'}><title>{row.symbol}: {signed(row.unrealizedPnLPct)}% unrealized return</title></circle>)}
+        <path d={area} fill="url(#return-area)" className="chart-return-area" />
+        <path d={curve} pathLength={1} className="chart-return-line" filter="url(#line-glow)" />
+        {rows.map((row, index) => <circle key={row.stockId} cx={points[index].x} cy={points[index].y} r="4.5" className={row.unrealizedPnLPct < 0 ? 'chart-point negative' : 'chart-point'} style={{ '--i': index } as CSSProperties}><title>{row.symbol}: {signed(row.unrealizedPnLPct)}% unrealized return</title></circle>)}
         <text x={plot.left} y="13" className="chart-unit">WEIGHT % / RETURN %</text>
       </svg>
       <div className="chart-key"><span><i className="bar-key" />Allocation</span><span><i className="line-key" />Unrealized return</span></div>
@@ -44,11 +51,14 @@ export function PositionPerformanceChart({ holdings }: { holdings: PortfolioHold
 }
 
 export function AllocationDonut({ holdings, cashWeight }: { holdings: PortfolioHolding[]; cashWeight: number }) {
-  const data = holdings.map(row => ({ name: row.symbol, value: row.weight }));
-  if (cashWeight > 0.005) data.push({ name: 'Cash', value: cashWeight });
+  const { series } = useChartPalette();
+  // Sorted like the dashboard legend so the first colours line up with it; cash is last and always neutral grey.
+  const holdingColors = series.slice(0, 4);
+  const data = holdings.map(row => ({ name: row.symbol, value: row.weight })).sort((a, b) => b.value - a.value)
+    .map((item, index) => ({ ...item, color: holdingColors[index % holdingColors.length] }));
+  if (cashWeight > 0.005) data.push({ name: 'Cash', value: cashWeight, color: series[series.length - 1] });
   if (!data.length) return <ChartEmpty message="Portfolio allocation appears after the first transaction." />;
 
-  const colors = ['#9b8cff', '#d1a65a', '#7783a5', '#c9c3ff', '#867044', '#59607a', '#6d63ad', '#b9a878'];
   let offset = 0;
   return (
     <div className="donut-chart" role="img" aria-label="Current portfolio allocation by asset and cash">
@@ -56,7 +66,7 @@ export function AllocationDonut({ holdings, cashWeight }: { holdings: PortfolioH
         <circle cx="110" cy="110" r="77" className="donut-track" />
         {data.map((item, index) => {
           const value = Math.max(0, item.value);
-          const segment = <circle key={item.name} cx="110" cy="110" r="77" pathLength="100" stroke={colors[index % colors.length]} strokeDasharray={`${value} ${100 - value}`} strokeDashoffset={-offset} className="donut-segment"><title>{item.name}: {value.toFixed(2)}%</title></circle>;
+          const segment = <circle key={item.name} cx="110" cy="110" r="77" pathLength="100" stroke={item.color} strokeDasharray={`${value} ${100 - value}`} strokeDashoffset={-offset} className="donut-segment" style={{ color: item.color, '--i': index } as CSSProperties}><title>{item.name}: {value.toFixed(2)}%</title></circle>;
           offset += value;
           return segment;
         })}

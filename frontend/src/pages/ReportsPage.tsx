@@ -46,7 +46,7 @@ export default function ReportsPage() {
       {['portfolio_transactions', 'portfolio_intelligence'].includes(reportType) && <label className="text-sm sm:col-span-2">Portfolio<select name="portfolioId" required className="mt-1 block w-full rounded border px-3 py-2"><option value="">Select a portfolio</option>{portfolios.data?.map(item => <option key={item.portfolio.id} value={item.portfolio.id}>{item.portfolio.name}</option>)}</select></label>}
       <label className="text-sm">From (optional)<input name="startDate" type="date" className="mt-1 block w-full rounded border px-3 py-2" /></label>
       <label className="text-sm">To (optional)<input name="endDate" type="date" className="mt-1 block w-full rounded border px-3 py-2" /></label>
-      <button disabled={downloading || portfolios.isPending} className="rounded bg-gold-600 px-4 py-2 text-white sm:col-span-2">{downloading ? 'Preparing…' : 'Download report'}</button>
+      <button disabled={downloading || portfolios.isPending} className="rounded bg-accent-600 px-4 py-2 text-white sm:col-span-2">{downloading ? 'Preparing…' : 'Download report'}</button>
       {error && <p className="text-red-600 sm:col-span-2" role="alert">{error.message}</p>}
     </form>
   </main>;

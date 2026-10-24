@@ -1,6 +1,8 @@
+import type { CSSProperties } from 'react';
 import type { Insight, MarketIndex, MarketStock } from '../api/contracts';
 
-const palette = ['#d1a65a', '#5ca98c', '#9a8a6b', '#b98a3f'];
+// Glossy series colours from the theme tokens, so light and dark both work.
+const palette = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)'];
 
 export function IndexPerformanceChart({ indices }: { indices: MarketIndex[] }) {
   return <DivergingBars title="Index session change" rows={indices.flatMap(index => index.changePercent == null ? [] : [{ label: index.name, value: index.changePercent }])} />;
@@ -17,7 +19,7 @@ export function InsightDistributionChart({ insights }: { insights: Insight[] }) 
   const max = Math.max(1, ...counts);
   return (
     <div className="insight-distribution" role="img" aria-label="Insight count by category">
-      {categories.map((category, index) => <div key={category}><span>{category.replace('_', ' ')}</span><i><b style={{ width: `${counts[index] / max * 100}%`, background: palette[index] }} /></i><strong>{counts[index]}</strong></div>)}
+      {categories.map((category, index) => <div key={category}><span>{category.replace('_', ' ')}</span><i><b style={{ width: `${counts[index] / max * 100}%`, '--bar': palette[index] } as CSSProperties} /></i><strong>{counts[index]}</strong></div>)}
     </div>
   );
 }
@@ -27,9 +29,9 @@ function DivergingBars({ title, rows, compact = false }: { title: string; rows: 
   return (
     <div className={`diverging-chart${compact ? ' compact' : ''}`} role="img" aria-label={title}>
       <div className="diverging-axis" aria-hidden="true" />
-      {rows.map(row => {
+      {rows.map((row, index) => {
         const width = Math.abs(row.value) / max * 48;
-        return <div className="diverging-row" key={row.label}><span>{row.label}</span><div className="diverging-track"><i className={row.value < 0 ? 'negative' : 'positive'} style={row.value < 0 ? { right: '50%', width: `${width}%` } : { left: '50%', width: `${width}%` }} /></div><strong className={row.value < 0 ? 'movement-down' : 'movement-up'}>{row.value >= 0 ? '+' : ''}{row.value.toFixed(2)}%</strong></div>;
+        return <div className="diverging-row" key={row.label}><span>{row.label}</span><div className="diverging-track"><i className={row.value < 0 ? 'negative' : 'positive'} style={{ [row.value < 0 ? 'right' : 'left']: '50%', width: `${width}%`, '--i': index } as CSSProperties} /></div><strong className={row.value < 0 ? 'movement-down' : 'movement-up'}>{row.value >= 0 ? '+' : ''}{row.value.toFixed(2)}%</strong></div>;
       })}
     </div>
   );

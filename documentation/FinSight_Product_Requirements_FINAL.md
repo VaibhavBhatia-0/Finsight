@@ -591,6 +591,11 @@ Desktop uses a compact expandable sidebar + top bar. Mobile uses a top
 bar + bottom navigation and purpose-built responsive layouts rather than
 shrinking desktop layouts.
 
+> **Superseded (24 October 2026):** the UI now uses a black/charcoal
+> theme with a lavender accent, pill tabs and a top header instead of a
+> sidebar. See "Visual System" and "Navigation --- As Implemented" in
+> the Website Specification.
+
 ## Backend & Analytics
 
 Backend is a layered Node.js/Express TypeScript application:

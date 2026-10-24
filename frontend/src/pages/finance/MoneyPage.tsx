@@ -157,7 +157,7 @@ function GoalsPanel({ goals, currency }: { goals: FinanceSummary['goals']; curre
           <div className="mini-stat"><dt>Needed per month</dt><dd>{goal.requiredMonthlyContribution == null ? 'Set a target date' : `${currency} ${goal.requiredMonthlyContribution.toLocaleString()}`}</dd></div>
           <div className="mini-stat"><dt>On track to finish</dt><dd>{goal.projectedCompletionDate ?? 'Needs savings history'}</dd></div>
         </dl>
-        {goal.linkedPortfolioId && <Link to={`/portfolios/${goal.linkedPortfolioId}`} className="mt-2 inline-block text-sm text-gold-300">Linked portfolio</Link>}
+        {goal.linkedPortfolioId && <Link to={`/portfolios/${goal.linkedPortfolioId}`} className="mt-2 inline-block text-sm text-accent-300">Linked portfolio</Link>}
         {contributingTo === String(goal.id) && <form onSubmit={event => { void submitContribution(event, String(goal.id)); }} className="mt-3 grid gap-2 sm:grid-cols-3">
           <input name="amount" aria-label="Amount" required type="number" min="0.01" step="0.01" placeholder="Amount" className="px-3 py-2" />
           <input name="contributionDate" aria-label="Date" required type="date" defaultValue={localToday()} className="px-3 py-2" />

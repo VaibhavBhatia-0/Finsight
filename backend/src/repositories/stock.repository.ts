@@ -133,7 +133,9 @@ export class StockRepository {
     `);
     const exchanges = await db.query(`SELECT e.code, e.country_code, COUNT(*)::int AS count FROM stocks s JOIN exchanges e ON e.id=s.exchange_id WHERE s.is_active GROUP BY e.code,e.country_code ORDER BY e.code`);
     const assetTypes = await db.query(`SELECT asset_type, COUNT(*)::int AS count FROM stocks WHERE is_active GROUP BY asset_type ORDER BY asset_type`);
-    return { ...result.rows[0], exchanges: exchanges.rows, assetTypes: assetTypes.rows };
+    // Feeds the screener's sector suggestions; only sectors that actually have listings are offered.
+    const sectors = await db.query(`SELECT sector, COUNT(*)::int AS count FROM stocks WHERE is_active AND sector IS NOT NULL AND TRIM(sector) <> '' GROUP BY sector ORDER BY count DESC, sector LIMIT 60`);
+    return { ...result.rows[0], exchanges: exchanges.rows, assetTypes: assetTypes.rows, sectors: sectors.rows };
   }
 
   static async screen(filters: ScreenerFilters) {

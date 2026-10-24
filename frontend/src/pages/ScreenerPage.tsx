@@ -1,261 +1,196 @@
-// src/pages/ScreenerPage.tsx
-import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { Search, X, ArrowUp, ArrowDown, Plus } from "lucide-react";
-import api from "../api/client";
-import type { ScreenerResponse } from "../api/contracts";
-import { endpoints } from "../api/endpoints";
-import { FreshnessBadge } from "../components/FreshnessBadge";
-import { useWatchlist } from "../hooks/useWatchlist";
-import { useAuth } from "../hooks/useAuth";
-import StockSearchInput from "../components/StockSearchInput";
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Plus, SlidersHorizontal, X } from 'lucide-react';
+import api from '../api/client';
+import type { ScreenerResponse, ScreenerStock } from '../api/contracts';
+import { endpoints } from '../api/endpoints';
+import { FreshnessBadge } from '../components/FreshnessBadge';
+import StockSearchInput from '../components/StockSearchInput';
+import { useAuth } from '../hooks/useAuth';
+import { useWatchlist } from '../hooks/useWatchlist';
 
-type NumericFilterKey = 'minMarketCap' | 'maxMarketCap' | 'minPrice' | 'maxPrice' | 'minPe' | 'maxPe' | 'minEps' | 'maxEps' | 'minDivYield' | 'maxDivYield' | 'minRevenue' | 'maxRevenue' | 'minProfit' | 'maxProfit' | 'minDebt' | 'maxDebt' | 'minVolume' | 'maxVolume' | 'maxVolatility' | 'minRsi' | 'maxRsi' | 'minYearPosition' | 'maxYearPosition';
-type ScreenerSort = 'symbol' | 'price' | 'marketCap' | 'peRatio' | 'eps' | 'dividendYield' | 'volume' | 'volatility' | 'rsi14' | 'yearPosition';
+interface UniverseStats {
+  total: number;
+  exchanges: Array<{ code: string; country_code: string; count: number }>;
+  sectors: Array<{ sector: string; count: number }>;
+}
 
-const numericDefaults: Record<NumericFilterKey, string> = {
-  minMarketCap: '', maxMarketCap: '', minPrice: '', maxPrice: '', minPe: '', maxPe: '',
-  minEps: '', maxEps: '', minDivYield: '', maxDivYield: '', minRevenue: '', maxRevenue: '',
-  minProfit: '', maxProfit: '', minDebt: '', maxDebt: '', minVolume: '', maxVolume: '',
-  maxVolatility: '',
-  minRsi: '', maxRsi: '', minYearPosition: '', maxYearPosition: '',
-};
+type SortChoice = 'name' | 'symbol' | 'volatility';
 
-const rangeFields: Array<{ label: string; min: NumericFilterKey; max: NumericFilterKey; step?: string; minValue?: number; maxValue?: number }> = [
-  { label: 'Price', min: 'minPrice', max: 'maxPrice', step: '0.01', minValue: 0 },
-  { label: 'Market cap', min: 'minMarketCap', max: 'maxMarketCap', minValue: 0 },
-  { label: 'P/E ratio', min: 'minPe', max: 'maxPe', step: '0.01' },
-  { label: 'EPS', min: 'minEps', max: 'maxEps', step: '0.01' },
-  { label: 'Dividend yield (%)', min: 'minDivYield', max: 'maxDivYield', step: '0.01' },
-  { label: 'Revenue', min: 'minRevenue', max: 'maxRevenue', minValue: 0 },
-  { label: 'Profit', min: 'minProfit', max: 'maxProfit' },
-  { label: 'Debt', min: 'minDebt', max: 'maxDebt', minValue: 0 },
-  { label: 'Volume', min: 'minVolume', max: 'maxVolume', minValue: 0 },
-  { label: 'RSI', min: 'minRsi', max: 'maxRsi', step: '0.01', minValue: 0, maxValue: 100 },
-  { label: '52-week position (%)', min: 'minYearPosition', max: 'maxYearPosition', step: '0.01', minValue: 0, maxValue: 100 },
+const sortChoices: Array<{ value: SortChoice; label: string }> = [
+  { value: 'name', label: 'Company name A–Z' },
+  { value: 'symbol', label: 'Ticker A–Z' },
+  { value: 'volatility', label: 'Calmest price history first' },
 ];
 
-const presets: Array<{ name: string; description: string; values: Partial<Record<NumericFilterKey, string>>; sort?: ScreenerSort; descending?: boolean }> = [
-  { name: 'Value', description: 'Positive EPS and P/E up to 20', values: { minEps: '0', maxPe: '20' }, sort: 'peRatio' },
-  { name: 'Growth', description: 'Positive revenue, profit, and EPS', values: { minRevenue: '1', minProfit: '1', minEps: '0' }, sort: 'marketCap', descending: true },
-  { name: 'Dividend', description: 'Sourced dividend yield of at least 1%', values: { minDivYield: '1' }, sort: 'dividendYield', descending: true },
-  { name: 'Momentum', description: 'Price in the upper 30% of its sourced 52-week range', values: { minYearPosition: '70' }, sort: 'yearPosition', descending: true },
-  { name: 'Large Cap', description: 'Market capitalization of at least 10 billion', values: { minMarketCap: '10000000000' }, sort: 'marketCap', descending: true },
-  { name: 'Low Volatility', description: 'Annualized volatility up to 20% when cached history exists', values: { maxVolatility: '20' }, sort: 'volatility' },
-];
+const popular = ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'AAPL', 'MSFT', 'NVDA'];
+const countryNames: Record<string, string> = { IN: 'India', US: 'United States' };
+const pageSize = 20;
 
-export const ScreenerPage: React.FC = () => {
+export default function ScreenerPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const watchlist = useWatchlist(Boolean(user));
-  const [securitySearch, setSecuritySearch] = useState('');
+  const [search, setSearch] = useState('');
+  const [exchange, setExchange] = useState('');
+  const [sectorText, setSectorText] = useState('');
+  const [sort, setSort] = useState<SortChoice>('name');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [maxVolatility, setMaxVolatility] = useState('');
+  const [page, setPage] = useState(1);
 
-  // Filter state
-  const [exchange, setExchange] = useState("");
-  const [country, setCountry] = useState("");
-  const [sector, setSector] = useState("");
-  const [numericFilters, setNumericFilters] = useState(numericDefaults);
-  const [movingAverageRelation, setMovingAverageRelation] = useState('');
-
-  // Sorting & pagination state
-  const [sortField, setSortField] = useState<ScreenerSort>("symbol");
-  const [sortDesc, setSortDesc] = useState<boolean>(false);
-  const [page, setPage] = useState<number>(1);
-  const pageSize = 20;
-
-  const filters = useMemo(() => ({
-    exchange,
-    country,
-    sector,
-    ...numericFilters,
-    movingAverageRelation,
-    sortBy: sortField,
-    sortOrder: sortDesc ? 'desc' : 'asc',
-    page,
-    limit: pageSize,
-  }), [
-    exchange,
-    country,
-    sector,
-    numericFilters,
-    movingAverageRelation,
-    sortField,
-    sortDesc,
-    page,
-  ]);
-
-  const { data, isLoading, isError, error } = useQuery<ScreenerResponse>({
-    queryKey: ["stocks", filters],
-    queryFn: async () => {
-      const resp = await api.get<ScreenerResponse>(endpoints.markets.screener, { params: filters });
-      return resp.data;
-    },
+  const stats = useQuery({
+    queryKey: ['universe-stats'],
+    queryFn: async () => (await api.get<UniverseStats>(endpoints.markets.universeStats)).data,
+    staleTime: 10 * 60 * 1000,
   });
 
-  const handleReset = () => {
-    setExchange("");
-    setCountry("");
-    setSector("");
-    setNumericFilters(numericDefaults);
-    setMovingAverageRelation('');
-    setPage(1);
-    setSortField("symbol");
-    setSortDesc(false);
-  };
+  // Sector matching is exact on the server, so only a sector picked from the suggestions is applied.
+  const sector = stats.data?.sectors.find(row => row.sector.toLowerCase() === sectorText.trim().toLowerCase())?.sector ?? '';
+  const sectorPending = Boolean(sectorText.trim()) && !sector;
+  const sectorCoverage = stats.data?.sectors.reduce((sum, row) => sum + row.count, 0) ?? 0;
+  // Indian markets first, then US, each alphabetically.
+  const exchanges = (stats.data?.exchanges ?? []).slice().sort((a, b) => (a.country_code === 'IN' ? 0 : 1) - (b.country_code === 'IN' ? 0 : 1) || a.code.localeCompare(b.code));
 
-  const applyPreset = (preset: typeof presets[number]) => {
-    setNumericFilters({ ...numericDefaults, ...preset.values });
-    setMovingAverageRelation(''); setPage(1); setSortField(preset.sort ?? 'symbol'); setSortDesc(Boolean(preset.descending));
-  };
+  const params = useMemo(() => ({
+    exchange: exchange || undefined,
+    sector: sector || undefined,
+    minPrice: minPrice || undefined,
+    maxPrice: maxPrice || undefined,
+    maxVolatility: maxVolatility || undefined,
+    sortBy: sort,
+    sortOrder: 'asc',
+    page,
+    limit: pageSize,
+  }), [exchange, sector, minPrice, maxPrice, maxVolatility, sort, page]);
 
-  const toggleSort = (field: ScreenerSort) => {
-    if (sortField === field) setSortDesc(!sortDesc);
-    else {
-      setSortField(field);
-      setSortDesc(false);
-    }
-  };
+  const results = useQuery({
+    queryKey: ['screener', params],
+    queryFn: async () => (await api.get<ScreenerResponse>(endpoints.markets.screener, { params })).data,
+    placeholderData: previous => previous,
+  });
 
-  const totalPages = data?.pagination.totalPages ?? 1;
-  const displayedStocks = data?.items ?? [];
+  const update = (apply: () => void) => { apply(); setPage(1); };
+  const clearAll = () => update(() => { setExchange(''); setSectorText(''); setMinPrice(''); setMaxPrice(''); setMaxVolatility(''); setSort('name'); });
+  const activeCount = [exchange, sector, minPrice, maxPrice, maxVolatility].filter(Boolean).length;
+  const total = results.data?.pagination.total ?? 0;
+  const totalPages = Math.max(1, results.data?.pagination.totalPages ?? 1);
+  const rows = results.data?.items ?? [];
+  const firstQuote = rows.find(row => row.quote)?.quote;
 
   return (
-    <main>
-      <header className="page-heading"><div><p className="page-eyebrow">Invest</p><h1 className="flex items-center"><Search className="mr-3 text-gold-400" aria-hidden="true" /> Stock screener</h1><p className="page-subtitle">Server-side filtering, sorting, and pagination across sourced observations. Presets are editable filter configurations, not recommendations; unavailable metrics are excluded.</p></div>{displayedStocks.find(stock => stock.quote)?.quote && <FreshnessBadge freshness={displayedStocks.find(stock => stock.quote)!.quote!.freshnessLabel} timestamp={displayedStocks.find(stock => stock.quote)!.quote!.marketTimestamp} />}</header>
-      <section className="panel mb-4"><div className="max-w-xl"><StockSearchInput label="Open a specific listed security" value={securitySearch} onChange={setSecuritySearch} onSelect={security => { if (security) navigate(`/markets/${security.id}`); }} /></div><div className="mt-4 flex flex-wrap gap-2" aria-label="Screener presets">{presets.map(preset => <button key={preset.name} type="button" className="btn-secondary px-3 py-2 text-sm" title={preset.description} onClick={() => applyPreset(preset)}>{preset.name}</button>)}</div></section>
-      <section
-        className="panel screener-filter-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 p-4 border rounded"
-        aria-label="Filter panel"
-      >
-        <div className="flex flex-col">
-          <label htmlFor="exchange" className="text-sm font-medium mb-1">Exchange</label>
-          <input
-            id="exchange"
-            type="text"
-            value={exchange}
-            onChange={e => setExchange(e.target.value)}
-            className="border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="e.g. NYSE"
-          />
+    <main className="screener-page">
+      <header className="page-heading">
+        <div>
+          <p className="page-eyebrow">Invest</p>
+          <h1>Stock screener</h1>
+          <p className="page-subtitle">Pick a market and a sector to browse listed companies, or start typing a name to jump straight to a stock.</p>
         </div>
-        <div className="flex flex-col">
-          <label htmlFor="country" className="text-sm font-medium mb-1">Country</label>
-          <input
-            id="country"
-            type="text"
-            value={country}
-            onChange={e => setCountry(e.target.value)}
-            className="border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="e.g. US"
-          />
-        </div>
-        <div className="flex flex-col">
-          <label htmlFor="sector" className="text-sm font-medium mb-1">Sector</label>
-          <input
-            id="sector"
-            type="text"
-            value={sector}
-            onChange={e => setSector(e.target.value)}
-            className="border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="e.g. Technology"
-          />
-        </div>
-        {rangeFields.map(field => (
-          <fieldset key={field.label} className="rounded border p-2">
-            <legend className="px-1 text-sm font-medium">{field.label}</legend>
-            <div className="grid grid-cols-2 gap-2">
-              <input aria-label={`Minimum ${field.label}`} type="number" placeholder="Min" value={numericFilters[field.min]} min={field.minValue} max={field.maxValue} step={field.step ?? '1'} onChange={event => setNumericFilters(current => ({ ...current, [field.min]: event.target.value }))} className="min-w-0 rounded border px-2 py-1" />
-              <input aria-label={`Maximum ${field.label}`} type="number" placeholder="Max" value={numericFilters[field.max]} min={field.minValue} max={field.maxValue} step={field.step ?? '1'} onChange={event => setNumericFilters(current => ({ ...current, [field.max]: event.target.value }))} className="min-w-0 rounded border px-2 py-1" />
-            </div>
-          </fieldset>
-        ))}
-        <fieldset className="rounded border p-2"><legend className="px-1 text-sm font-medium">Annualized volatility (%)</legend><input aria-label="Maximum annualized volatility" type="number" placeholder="Maximum" value={numericFilters.maxVolatility} min="0" step="0.01" onChange={event => setNumericFilters(current => ({ ...current, maxVolatility: event.target.value }))} className="w-full rounded border px-2 py-1" /></fieldset>
-        <div className="flex flex-col">
-          <label htmlFor="moving-average" className="text-sm font-medium mb-1">Moving-average relation</label>
-          <select id="moving-average" value={movingAverageRelation} onChange={event => setMovingAverageRelation(event.target.value)} className="rounded border px-2 py-1">
-            <option value="">Any</option>
-            <option value="ABOVE_50">Price above SMA 50</option>
-            <option value="BELOW_50">Price below SMA 50</option>
-            <option value="ABOVE_200">Price above SMA 200</option>
-            <option value="BELOW_200">Price below SMA 200</option>
-            <option value="GOLDEN_CROSS">SMA 50 above SMA 200</option>
-            <option value="DEATH_CROSS">SMA 50 below SMA 200</option>
-          </select>
+        {firstQuote && <FreshnessBadge freshness={firstQuote.freshnessLabel} timestamp={firstQuote.marketTimestamp} />}
+      </header>
+
+      <section className="panel screener-start">
+        <StockSearchInput label="Find a stock" value={search} onChange={setSearch} placeholder="Try Reliance, TCS, Apple or NVDA" onSelect={security => { if (security) navigate(`/markets/${security.id}`); }} />
+        <div className="suggestion-row" aria-label="Popular stocks">
+          <span>Popular</span>
+          {popular.map(symbol => <Link key={symbol} to={`/markets?q=${symbol}`} className="chip">{symbol}</Link>)}
         </div>
       </section>
-      <div className="flex space-x-2 mb-4">
-        <button
-          onClick={handleReset}
-          className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary"
-        >
-          <X className="mr-2" aria-hidden="true" /> Reset Filters
-        </button>
-      </div>
-      {isLoading && <p className="text-center py-8" role="status">Loading stocks…</p>}
-      {isError && <p className="text-center text-red-600 py-8" role="alert">Error loading stocks: {error.message}</p>}
-      {!isLoading && data && data.items.length === 0 && <p className="text-center py-8" role="status">No stocks match the current filters.</p>}
-      {!isLoading && data && data.items.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse" role="table">
-            <thead className="bg-gray-100 dark:bg-gray-700">
-              <tr>
-                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("symbol")}>Symbol {sortField === "symbol" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
-                <th className="px-4 py-2 text-left">Name</th>
-                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("price")}>Price {sortField === "price" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
-                <th className="px-4 py-2 text-left">Exchange</th>
-                <th className="px-4 py-2 text-left">Sector</th>
-                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("marketCap")}>Market Cap {sortField === "marketCap" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
-                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("peRatio")}>P/E {sortField === "peRatio" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
-                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("eps")}>EPS {sortField === "eps" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
-                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("dividendYield")}>Yield {sortField === "dividendYield" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
-                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("rsi14")}>RSI {sortField === "rsi14" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
-                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("volatility")}>Volatility {sortField === "volatility" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
-                <th className="px-4 py-2 text-left cursor-pointer" onClick={() => toggleSort("yearPosition")}>52-week position {sortField === "yearPosition" && (sortDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}</th>
-                <th className="px-4 py-2 text-left">Freshness</th>
-                <th className="px-4 py-2 text-left">Watchlist</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedStocks.map(stock => (
-                <tr key={stock.id} className="border-t dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer" onClick={() => navigate(`/markets/${stock.id}`)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") navigate(`/markets/${stock.id}`); }}>
-                  <td className="px-4 py-2 font-mono">{stock.symbol}</td>
-                  <td className="px-4 py-2">{stock.name}</td>
-                  <td className="px-4 py-2">{optionalNumber(stock.price)}</td>
-                  <td className="px-4 py-2">{stock.exchange}</td>
-                  <td className="px-4 py-2">{stock.sector}</td>
-                  <td className="px-4 py-2">{optionalCompact(stock.marketCap)}</td>
-                  <td className="px-4 py-2">{optionalNumber(stock.peRatio)}</td>
-                  <td className="px-4 py-2">{optionalNumber(stock.eps)}</td>
-                  <td className="px-4 py-2">{optionalPercent(stock.dividendYield)}</td>
-                  <td className="px-4 py-2">{optionalNumber(stock.rsi14)}</td>
-                  <td className="px-4 py-2">{optionalPercent(stock.volatility)}</td>
-                  <td className="px-4 py-2">{optionalPercent(stock.yearPosition)}</td>
-                  <td className="px-4 py-2">{stock.quote ? <FreshnessBadge freshness={stock.quote.freshnessLabel} timestamp={stock.quote.marketTimestamp} /> : <FreshnessBadge freshness="UNAVAILABLE" />}</td>
-                  <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => user ? watchlist.addToWatchlist(stock.id) : navigate('/login')} className="text-primary hover:text-primary-dark" aria-label={`Add ${stock.symbol} to watchlist`}>
-                      <Plus size={16} aria-hidden="true" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+      <section className="panel screener-filters" aria-label="Screener filters">
+        <div className="screener-filter-block">
+          <p className="filter-label">Market</p>
+          <div className="chip-row" role="group" aria-label="Market">
+            <button type="button" className={`chip${exchange ? '' : ' active'}`} aria-pressed={!exchange} onClick={() => update(() => setExchange(''))}>All markets{stats.data ? <small>{compact(stats.data.total)}</small> : null}</button>
+            {exchanges.map(row => (
+              <button type="button" key={row.code} className={`chip${exchange === row.code ? ' active' : ''}`} aria-pressed={exchange === row.code} onClick={() => update(() => setExchange(row.code))}>
+                {row.code} · {countryNames[row.country_code] ?? row.country_code}<small>{compact(row.count)}</small>
+              </button>
+            ))}
+          </div>
         </div>
-      )}
-      {data && data.items.length > 0 && (
-        <nav className="flex items-center justify-between mt-4" aria-label="Pagination">
-          <button disabled={page === 1} onClick={() => setPage(p => Math.max(p - 1, 1))} className="px-3 py-1 border rounded disabled:opacity-50">Previous</button>
-          <span className="text-sm">Page {page} of {totalPages}</span>
-          <button disabled={page === totalPages} onClick={() => setPage(p => Math.min(p + 1, totalPages))} className="px-3 py-1 border rounded disabled:opacity-50">Next</button>
-        </nav>
-      )}
+
+        <div className="screener-filter-pair">
+          <label className="filter-field" htmlFor="screener-sector">
+            <span className="filter-label">Sector</span>
+            <input id="screener-sector" list="screener-sectors" value={sectorText} onChange={event => update(() => setSectorText(event.target.value))} placeholder={stats.data?.sectors.length ? 'Any sector · start typing' : 'Sectors unavailable'} disabled={!stats.data?.sectors.length} />
+            <datalist id="screener-sectors">{stats.data?.sectors.map(row => <option key={row.sector} value={row.sector}>{row.count} listings</option>)}</datalist>
+            {sectorPending ? <small className="filter-hint">Choose a sector from the suggestions.</small> : stats.data && sectorCoverage < stats.data.total && <small className="filter-hint">Sector data covers {sectorCoverage.toLocaleString()} of {stats.data.total.toLocaleString()} listings; the official directories do not include it.</small>}
+          </label>
+          <label className="filter-field" htmlFor="screener-sort">
+            <span className="filter-label">Sort by</span>
+            <select id="screener-sort" value={sort} onChange={event => update(() => setSort(event.target.value as SortChoice))}>
+              {sortChoices.map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <details className="screener-more">
+          <summary><SlidersHorizontal size={14} aria-hidden /> More filters</summary>
+          <div className="screener-filter-pair">
+            <div className="filter-field">
+              <span className="filter-label">Price range</span>
+              <div className="range-inputs">
+                <input aria-label="Minimum price" type="number" min="0" step="0.01" placeholder="From" value={minPrice} onChange={event => update(() => setMinPrice(event.target.value))} />
+                <input aria-label="Maximum price" type="number" min="0" step="0.01" placeholder="To" value={maxPrice} onChange={event => update(() => setMaxPrice(event.target.value))} />
+              </div>
+            </div>
+            <label className="filter-field" htmlFor="screener-volatility">
+              <span className="filter-label">Price swings at most (yearly volatility %)</span>
+              <input id="screener-volatility" type="number" min="0" step="1" placeholder="e.g. 25" value={maxVolatility} onChange={event => update(() => setMaxVolatility(event.target.value))} />
+            </label>
+          </div>
+          <p className="filter-hint">These two use stored price history, so stocks without it are left out. Valuation filters (P/E, EPS, market cap, revenue, profit, debt) need a fundamentals provider and stay hidden until one is connected.</p>
+        </details>
+
+        {activeCount > 0 && <button type="button" className="clear-filters" onClick={clearAll}><X size={14} aria-hidden /> Clear {activeCount} filter{activeCount === 1 ? '' : 's'}</button>}
+      </section>
+
+      <section className="panel" aria-live="polite">
+        <div className="panel-header">
+          <div><h2 className="panel-title">{results.isPending ? 'Loading stocks…' : `${total.toLocaleString()} stock${total === 1 ? '' : 's'}`}</h2><p className="panel-subtitle">Prices are shown in the currency each stock trades in. Select a row to open the stock.</p></div>
+        </div>
+        {results.isError && <p className="error-banner" role="alert">Stocks could not be loaded: {results.error.message}</p>}
+        {!results.isPending && !results.isError && !rows.length && <div className="empty-state"><p>No stocks match these filters.</p>{activeCount > 0 && <button type="button" className="btn-secondary mt-3 px-4" onClick={clearAll}>Clear filters</button>}</div>}
+        {rows.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="screener-table">
+              <thead><tr><th className="text-left">Stock</th><th className="text-left">Market</th><th className="text-right">Price</th><th className="text-right">Today</th><th className="text-left">Data</th><th><span className="sr-only">Watchlist</span></th></tr></thead>
+              <tbody>
+                {rows.map(stock => (
+                  <tr key={stock.id} className="screener-row" tabIndex={0} onClick={() => navigate(`/markets/${stock.id}`)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate(`/markets/${stock.id}`); } }}>
+                    <td><div className="flex items-center gap-3"><span className="symbol-token">{stock.symbol.slice(0, 2)}</span><div><strong>{stock.symbol}</strong><p className="screener-name">{stock.name}</p></div></div></td>
+                    <td>{stock.exchangeCode ?? stock.exchange}<p className="screener-name">{countryNames[stock.countryCode] ?? stock.countryCode}</p></td>
+                    <td className="text-right font-mono">{price(stock)}</td>
+                    <td className="text-right">{stock.changePercent == null ? <span className="text-gray-500">—</span> : <span className={`change-pill ${stock.changePercent >= 0 ? 'up' : 'down'}`}>{stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%</span>}</td>
+                    <td>{stock.quote ? <FreshnessBadge freshness={stock.quote.freshnessLabel} timestamp={stock.quote.marketTimestamp} /> : <FreshnessBadge freshness="UNAVAILABLE" />}</td>
+                    <td className="text-right" onClick={event => event.stopPropagation()}>
+                      <button type="button" className="icon-action" onClick={() => (user ? watchlist.addToWatchlist(stock.id) : navigate('/login'))} aria-label={`Add ${stock.symbol} to watchlist`} title="Add to watchlist"><Plus size={15} aria-hidden /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {rows.length > 0 && (
+          <nav className="table-pagination" aria-label="Pagination">
+            <span>Showing {((page - 1) * pageSize + 1).toLocaleString()}–{Math.min(page * pageSize, total).toLocaleString()} of {total.toLocaleString()}</span>
+            <span className="flex gap-2">
+              <button type="button" className="btn-secondary px-3" disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))}><ChevronLeft size={15} aria-hidden /> Previous</button>
+              <button type="button" className="btn-secondary px-3" disabled={page >= totalPages} onClick={() => setPage(current => Math.min(totalPages, current + 1))}>Next <ChevronRight size={15} aria-hidden /></button>
+            </span>
+          </nav>
+        )}
+      </section>
     </main>
   );
-};
+}
 
-export default ScreenerPage;
-
-function optionalNumber(value: number | null) { return value == null ? 'N/A' : value.toFixed(2); }
-function optionalPercent(value: number | null) { return value == null ? 'N/A' : `${value.toFixed(2)}%`; }
-function optionalCompact(value: number | null) { return value == null ? 'N/A' : Intl.NumberFormat('en-US', { notation: 'compact' }).format(value); }
+function price(stock: ScreenerStock) {
+  if (stock.price == null) return <span className="text-gray-500">—</span>;
+  try { return new Intl.NumberFormat('en-IN', { style: 'currency', currency: stock.currency, maximumFractionDigits: 2 }).format(stock.price); } catch { return `${stock.currency} ${stock.price.toFixed(2)}`; }
+}
+function compact(value: number) { return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value); }

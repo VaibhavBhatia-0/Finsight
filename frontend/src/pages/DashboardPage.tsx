@@ -107,7 +107,7 @@ export default function DashboardPage() {
     insights: (
       <Panel title="Ledger insights" subtitle="Deterministic observations, not advice" action={<Link to="/insights">View all <ArrowUpRight size={13} /></Link>}>
         {insights.error ? <p className="error-banner" role="alert">Insights are temporarily unavailable.</p> : insights.data?.insights.length ? <div className="data-list">{insights.data.insights.slice(0, 3).map(item => (
-          <div className="data-row" key={item.id}><div className="flex gap-3"><Sparkles size={16} className="mt-1 text-gold-400" /><div><strong>{item.title}</strong><p>{item.message}</p></div></div>{item.metric && <span className="font-mono text-xs text-gold-400">{item.metric.value.toFixed(2)} {item.metric.unit}</span>}</div>
+          <div className="data-row" key={item.id}><div className="flex gap-3"><Sparkles size={16} className="mt-1 text-accent-400" /><div><strong>{item.title}</strong><p>{item.message}</p></div></div>{item.metric && <span className="font-mono text-xs text-accent-400">{item.metric.value.toFixed(2)} {item.metric.unit}</span>}</div>
         ))}</div> : <Empty text="Add finance or portfolio data to generate observations." />}
       </Panel>
     ),
@@ -120,13 +120,13 @@ export default function DashboardPage() {
         <Link className="btn-primary inline-flex items-center gap-2 px-4 py-2" to="/finance/transactions"><WalletCards size={16} /> Add transaction</Link>
       </header>
 
-      {user && !user.emailVerified && <div className="notice mb-5 p-3 text-sm">Your email is not verified. <Link className="text-gold-300 underline" to="/verify-email">Request a verification link.</Link></div>}
+      {user && !user.emailVerified && <div className="notice mb-5 p-3 text-sm">Your email is not verified. <Link className="text-accent-300 underline" to="/verify-email">Request a verification link.</Link></div>}
 
       {(portfolios.error || finance.error) && <div className="error-banner mb-5" role="alert">Some account totals are temporarily unavailable. Navigation and unaffected dashboard sections remain available.</div>}
 
       <div className="content-stack">
         {preferences.order.filter(id => preferences.visible[id]).map(id => (
-          <section key={id} className={id === 'summary' || id === 'labLaunch' ? '' : 'dashboard-section'}>
+          <section key={id} className={`dashboard-block dashboard-block--${id}${id === 'summary' || id === 'labLaunch' ? '' : ' dashboard-section'}`}>
             <button onClick={() => { void setVisibility(id, false).catch(() => undefined); }} className="dashboard-hide">Hide</button>
             {sections[id]}
           </section>
@@ -154,7 +154,7 @@ function Action({ to, icon: Icon, title, description }: { to: string; icon: type
 }
 
 function Empty({ text, link, label }: { text: string; link?: string; label?: string }) {
-  return <div className="empty-state"><p>{text}</p>{link && <Link className="mt-3 inline-block text-sm text-gold-300" to={link}>{label}</Link>}</div>;
+  return <div className="empty-state"><p>{text}</p>{link && <Link className="mt-3 inline-block text-sm text-accent-300" to={link}>{label}</Link>}</div>;
 }
 
 function money(value: number, currency: string) { return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value); }

@@ -29,7 +29,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthShell title="Create account" footer={<>Already registered? <Link className="text-gold-700 hover:underline" to="/login">Sign in</Link></>}>
+    <AuthShell title="Create account" footer={<>Already registered? <Link className="text-accent-700 hover:underline" to="/login">Sign in</Link></>}>
       <form className="space-y-4" onSubmit={submit}>
         <label className="block text-sm">Name<input className={inputClass} name="name" autoComplete="name" required /></label>
         <label className="block text-sm">Email<input className={inputClass} name="email" type="email" autoComplete="email" required /></label>

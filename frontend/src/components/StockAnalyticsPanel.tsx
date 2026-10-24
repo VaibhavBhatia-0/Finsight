@@ -8,6 +8,7 @@ import { useTechnicalAnalysis } from '../hooks/useMarketIntelligence';
 import FreshnessBadge from './FreshnessBadge';
 import { Spinner } from './Spinner';
 import { ThemeContext } from '../context/ThemeContext';
+import { alpha, areaFill, barFill, chartChrome, chartPalette, glowLine, trendColor } from './chartTheme';
 
 const periods = ['1D', '5D', '1M', '6M', 'YTD', '1Y', '5Y', 'MAX'] as const;
 const overlayOptions = ['SMA 20', 'SMA 50', 'SMA 200', 'EMA 20', 'Bollinger', 'Volume', 'RSI', 'MACD'] as const;
@@ -72,23 +73,27 @@ function chartOption(analysis: TechnicalAnalysisResponse | undefined, comparison
   if (showVolume) grids.push({ left: 58, right: 24, top: `${priceHeight + 9}%`, height: lowerCount ? '10%' : '16%' });
   const lowerNames = [showRsi ? 'RSI' : null, showMacd ? 'MACD' : null].filter(Boolean) as string[];
   lowerNames.forEach((_, index) => grids.push({ left: 58, right: 24, top: `${showVolume ? priceHeight + 23 + index * 15 : priceHeight + 9 + index * 18}%`, height: lowerCount === 2 ? '11%' : '15%' }));
-  const palette = theme === 'light' ? { text: '#625b4d', grid: 'rgba(90,72,38,.12)', border: '#d5c6aa', tooltip: '#fff9ed', tooltipText: '#24211c', primary: '#9a722a', comparison: '#25705b' } : { text: '#929690', grid: 'rgba(255,255,255,.055)', border: '#343834', tooltip: '#101210', tooltipText: '#f5f5ef', primary: '#d4aa58', comparison: '#61b89a' };
-  const series: any[] = [{ name: hasComparison ? `${symbol} normalized` : symbol, type: 'line', data: primary, showSymbol: false, smooth: .12, lineStyle: { width: 2, color: palette.primary }, itemStyle: { color: palette.primary }, xAxisIndex: 0, yAxisIndex: 0 }];
-  if (hasComparison) series.push({ name: `${comparisonSymbol} normalized`, type: 'line', data: compared, showSymbol: false, lineStyle: { width: 1.5, color: palette.comparison }, xAxisIndex: 0, yAxisIndex: 0 });
+  const colors = chartPalette(theme);
+  const chrome = chartChrome(colors);
+  // The price line glows green over a rising period and red over a falling one.
+  const lineColor = trendColor(colors, primary);
+  const palette = { ...colors, primary: lineColor, comparison: colors.series[1] };
+  const series: any[] = [{ name: hasComparison ? `${symbol} normalized` : symbol, type: 'line', data: primary, showSymbol: false, smooth: .2, lineStyle: glowLine(lineColor), itemStyle: { color: lineColor }, areaStyle: hasComparison ? undefined : areaFill(lineColor, .28), xAxisIndex: 0, yAxisIndex: 0 }];
+  if (hasComparison) series.push({ name: `${comparisonSymbol} normalized`, type: 'line', data: compared, showSymbol: false, smooth: .2, lineStyle: glowLine(palette.comparison, 1.8), itemStyle: { color: palette.comparison }, xAxisIndex: 0, yAxisIndex: 0 });
   const addLine = (enabled: boolean, name: string, values: Array<number | null>, style: object = {}) => { if (enabled) series.push({ name, type: 'line', data: hasComparison && base ? values.map(value => value == null ? null : value / base * 100) : values, showSymbol: false, lineStyle: { width: 1, ...style }, xAxisIndex: 0, yAxisIndex: 0 }); };
-  addLine(overlays.has('SMA 20'), 'SMA 20', points.map(row => row.sma20), { type: 'dashed' });
-  addLine(overlays.has('SMA 50'), 'SMA 50', points.map(row => row.sma50), { type: 'dashed' });
-  addLine(overlays.has('SMA 200'), 'SMA 200', points.map(row => row.sma200), { type: 'dashed' });
-  addLine(overlays.has('EMA 20'), 'EMA 20', points.map(row => row.ema20), { color: '#b98568' });
-  if (overlays.has('Bollinger')) { addLine(true, 'Bollinger upper', points.map(row => row.bollingerUpper), { width: .8, opacity: .7 }); addLine(true, 'Bollinger middle', points.map(row => row.bollingerMiddle), { width: .8, type: 'dotted', opacity: .6 }); addLine(true, 'Bollinger lower', points.map(row => row.bollingerLower), { width: .8, opacity: .7 }); }
+  addLine(overlays.has('SMA 20'), 'SMA 20', points.map(row => row.sma20), { type: 'dashed', color: colors.series[0] });
+  addLine(overlays.has('SMA 50'), 'SMA 50', points.map(row => row.sma50), { type: 'dashed', color: colors.series[4] });
+  addLine(overlays.has('SMA 200'), 'SMA 200', points.map(row => row.sma200), { type: 'dashed', color: colors.series[3] });
+  addLine(overlays.has('EMA 20'), 'EMA 20', points.map(row => row.ema20), { color: colors.series[2] });
+  if (overlays.has('Bollinger')) { addLine(true, 'Bollinger upper', points.map(row => row.bollingerUpper), { width: .8, opacity: .7, color: colors.series[2] }); addLine(true, 'Bollinger middle', points.map(row => row.bollingerMiddle), { width: .8, type: 'dotted', opacity: .6, color: colors.series[2] }); addLine(true, 'Bollinger lower', points.map(row => row.bollingerLower), { width: .8, opacity: .7, color: colors.series[2] }); }
   let gridIndex = 1;
-  if (showVolume) { series.push({ name: 'Volume', type: 'bar', data: points.map(row => row.volume), xAxisIndex: gridIndex, yAxisIndex: gridIndex, itemStyle: { color: 'rgba(205,167,94,.34)' } }); gridIndex += 1; }
+  if (showVolume) { series.push({ name: 'Volume', type: 'bar', data: points.map((row, index) => ({ value: row.volume, itemStyle: barFill(index > 0 && row.close < points[index - 1].close ? colors.loss : colors.gain) })), itemStyle: { color: colors.gain }, barMaxWidth: 8, xAxisIndex: gridIndex, yAxisIndex: gridIndex }); gridIndex += 1; }
   if (showRsi) { series.push({ name: 'RSI 14', type: 'line', data: points.map(row => row.rsi14), showSymbol: false, xAxisIndex: gridIndex, yAxisIndex: gridIndex, lineStyle: { width: 1.3, color: palette.comparison }, markLine: { silent: true, symbol: 'none', data: [{ yAxis: 30 }, { yAxis: 70 }], lineStyle: { color: palette.grid, type: 'dashed' } } }); gridIndex += 1; }
-  if (showMacd) series.push({ name: 'MACD', type: 'line', data: points.map(row => row.macd), showSymbol: false, xAxisIndex: gridIndex, yAxisIndex: gridIndex }, { name: 'Signal', type: 'line', data: points.map(row => row.macdSignal), showSymbol: false, xAxisIndex: gridIndex, yAxisIndex: gridIndex }, { name: 'Histogram', type: 'bar', data: points.map(row => row.macdHistogram), xAxisIndex: gridIndex, yAxisIndex: gridIndex });
-  const axis = { type: 'category', data: points.map(row => formatAxisDate(row.date)), boundaryGap: false, axisLine: { lineStyle: { color: palette.border } }, axisLabel: { color: palette.text, hideOverlap: true }, splitLine: { show: false } };
+  if (showMacd) series.push({ name: 'MACD', type: 'line', data: points.map(row => row.macd), showSymbol: false, xAxisIndex: gridIndex, yAxisIndex: gridIndex }, { name: 'Signal', type: 'line', data: points.map(row => row.macdSignal), showSymbol: false, xAxisIndex: gridIndex, yAxisIndex: gridIndex }, { name: 'Histogram', type: 'bar', data: points.map(row => ({ value: row.macdHistogram, itemStyle: { color: alpha((row.macdHistogram ?? 0) >= 0 ? colors.gain : colors.loss, .75), borderRadius: 2 } })), xAxisIndex: gridIndex, yAxisIndex: gridIndex });
+  const axis = { type: 'category', data: points.map(row => formatAxisDate(row.date)), boundaryGap: false, axisLine: { lineStyle: { color: palette.grid } }, axisLabel: { color: palette.text, hideOverlap: true }, splitLine: { show: false } };
   const xAxes = grids.map((_, index) => ({ ...axis, gridIndex: index, axisLabel: index === grids.length - 1 ? axis.axisLabel : { show: false } }));
-  const yAxes = grids.map((_, index) => { const lower = lowerNames[index - (showVolume ? 2 : 1)]; return { type: 'value', gridIndex: index, scale: index === 0, min: lower === 'RSI' ? 0 : undefined, max: lower === 'RSI' ? 100 : undefined, axisLabel: { color: palette.text, formatter: showVolume && index === 1 ? (value: number) => compact(value) : undefined }, splitLine: { lineStyle: { color: palette.grid } } }; });
-  return { animationDuration: 350, backgroundColor: 'transparent', grid: grids, tooltip: { trigger: 'axis', backgroundColor: palette.tooltip, borderColor: palette.border, textStyle: { color: palette.tooltipText } }, legend: { top: 0, right: 18, textStyle: { color: palette.text, fontSize: 10 } }, xAxis: xAxes, yAxis: yAxes, dataZoom: [{ type: 'inside', xAxisIndex: grids.map((_, index) => index) }], series };
+  const yAxes = grids.map((_, index) => { const lower = lowerNames[index - (showVolume ? 2 : 1)]; return { type: 'value', gridIndex: index, scale: index === 0, min: lower === 'RSI' ? 0 : undefined, max: lower === 'RSI' ? 100 : undefined, axisLabel: { color: palette.text, showMaxLabel: !(showVolume && index === 1), formatter: showVolume && index === 1 ? (value: number) => compact(value) : undefined }, splitNumber: showVolume && index === 1 ? 2 : undefined, splitLine: chrome.splitLine }; });
+  return { ...chrome.base, grid: grids, tooltip: chrome.tooltip, legend: { ...chrome.legend, right: 18, textStyle: { color: palette.text, fontSize: 10 } }, xAxis: xAxes, yAxis: yAxes, dataZoom: [{ type: 'inside', xAxisIndex: grids.map((_, index) => index) }], series };
 }
 
 function Fact({ label, value }: { label: string; value: string }) { return <div><dt>{label}</dt><dd>{value}</dd></div>; }

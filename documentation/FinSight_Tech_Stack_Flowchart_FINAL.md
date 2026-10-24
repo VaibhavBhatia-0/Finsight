@@ -296,7 +296,8 @@ supplies delayed/EOD data.
 
 -   Dark + light themes.
 -   Charcoal/black dark foundation.
--   Champagne/gold accent.
+-   Champagne/gold accent (superseded 24 October 2026 by a lavender
+    accent and pill-based layout; see the Website Specification).
 -   Soft radial gradients with subtle cursor-following ambient lighting.
 -   Restrained mobile ambient animation.
 -   Mostly solid cards with selective transparency.
@@ -503,7 +504,7 @@ finsight/
 ├── backend/
 ├── analytics/
 ├── database/
-├── docs/
+├── documentation/
 ├── .github/workflows/
 ├── .env.example
 └── README.md
