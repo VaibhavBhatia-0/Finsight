@@ -199,7 +199,9 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent-fill); 
   .header-row { gap: 12px; }
   .round-button { width: 42px; height: 42px; }
   .user-chip { padding-right: 10px; }
-  .user-meta, .theme-toggle { display: none; }
+  .user-meta { display: none; }
+  /* The theme button and account menu stay on phones; they step aside only while the search box is open. */
+  .header-search.open ~ .theme-toggle, .header-search.open ~ .user-menu, .header-search.open ~ .sign-in-link { display: none; }
   .header-search.open input { width: min(52vw, 220px); margin-right: -42px; min-height: 42px !important; }
   .primary-nav .pill { padding: 9px 11px; font-size: .8rem; }
   .app-content { padding: 18px 14px 40px; }
@@ -746,6 +748,7 @@ a.data-row:hover { border-color: var(--line-strong); }
   .stock-quote { text-align: left; }
   .metric-card { min-height: 116px; }
   .panel { padding: 18px; }
+  .stock-inline-panel { margin-inline: -8px; padding: 12px 10px; }
   .app-content table { min-width: 650px; }
   .diverging-row { grid-template-columns: 82px 1fr 56px; }
   .planning-tabs button { flex: 1 1 46%; justify-content: center; }

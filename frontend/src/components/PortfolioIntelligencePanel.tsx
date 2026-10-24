@@ -3,7 +3,7 @@ import ReactECharts from 'echarts-for-react';
 import { Info, Save } from 'lucide-react';
 import type { PortfolioBenchmark, PortfolioIntelligence } from '../api/contracts';
 import { useUpdatePortfolio } from '../hooks/usePortfolios';
-import { areaFill, barFill, chartChrome, glowLine, trendColor, useChartPalette } from './chartTheme';
+import { areaFill, barFill, chartChrome, glowLine, trendColor, useChartFit, useChartPalette } from './chartTheme';
 
 export default function PortfolioIntelligencePanel({ data, benchmarks }: { data: PortfolioIntelligence; benchmarks: PortfolioBenchmark[] }) {
   const update = useUpdatePortfolio(data.portfolio.id);
@@ -11,6 +11,7 @@ export default function PortfolioIntelligencePanel({ data, benchmarks }: { data:
   const [targets, setTargets] = useState<Record<string, number>>(data.portfolio.allocationTargets || {});
   const currency = data.portfolio.baseCurrency;
   const palette = useChartPalette();
+  const fit = useChartFit();
   const performanceOption = useMemo(() => {
     const chrome = chartChrome(palette);
     const portfolioValues = data.performance?.series.map(row => row.portfolioNormalized) ?? [];
@@ -58,7 +59,7 @@ export default function PortfolioIntelligencePanel({ data, benchmarks }: { data:
         <Stat label="Benchmark CAGR" value={percent(performance.benchmarkCagr)} />
         <Stat label="XIRR" value={percent(performance.xirr)} />
       </dl>
-      <div role="img" aria-label={`Normalized performance chart for ${data.portfolio.name}${performance.benchmark ? ` and ${performance.benchmark.name}` : ''}`}><ReactECharts option={performanceOption} notMerge lazyUpdate style={{ height: 340 }} /></div>
+      <div role="img" aria-label={`Normalized performance chart for ${data.portfolio.name}${performance.benchmark ? ` and ${performance.benchmark.name}` : ''}`}><ReactECharts option={performanceOption} notMerge lazyUpdate style={{ height: fit.height(340) }} /></div>
       <p className="methodology-copy"><Info size={14} aria-hidden /> {performance.methodology}</p>
     </section>
 

@@ -8,7 +8,7 @@ import { useTechnicalAnalysis } from '../hooks/useMarketIntelligence';
 import FreshnessBadge from './FreshnessBadge';
 import { Spinner } from './Spinner';
 import { ThemeContext } from '../context/ThemeContext';
-import { alpha, areaFill, barFill, chartChrome, chartPalette, glowLine, trendColor } from './chartTheme';
+import { alpha, areaFill, barFill, chartChrome, chartPalette, glowLine, trendColor, useChartFit } from './chartTheme';
 
 const periods = ['1D', '5D', '1M', '6M', 'YTD', '1Y', '5Y', 'MAX'] as const;
 const overlayOptions = ['SMA 20', 'SMA 50', 'SMA 200', 'EMA 20', 'Bollinger', 'Volume', 'RSI', 'MACD'] as const;
@@ -27,7 +27,8 @@ export default function StockAnalyticsPanel({ stock, comparisonCandidates = [] }
     enabled: Boolean(comparison),
     staleTime: period === '1D' || period === '5D' ? 60_000 : 60 * 60 * 1000,
   });
-  const option = useMemo(() => chartOption(technicals.data, comparisonHistory.data, stock.symbol, comparison?.symbol, overlays, theme), [comparison?.symbol, comparisonHistory.data, overlays, stock.symbol, technicals.data, theme]);
+  const fit = useChartFit();
+  const option = useMemo(() => chartOption(technicals.data, comparisonHistory.data, stock.symbol, comparison?.symbol, overlays, theme, fit.touch), [comparison?.symbol, comparisonHistory.data, overlays, stock.symbol, technicals.data, theme, fit.touch]);
   const quote = stock.quote;
 
   function toggle(name: string) { setOverlays(current => { const next = new Set(current); if (next.has(name)) next.delete(name); else next.add(name); return next; }); }
@@ -48,14 +49,14 @@ export default function StockAnalyticsPanel({ stock, comparisonCandidates = [] }
     {technicals.isPending ? <Spinner /> : technicals.error ? <p role="alert" className="error-banner">Historical market data is unavailable.</p> : technicals.data ? <>
       {technicals.data.isStale && <p role="status" className="error-banner">This chart uses cached historical data. Retrieved {new Date(technicals.data.fetchedAt).toLocaleString()}.</p>}
       {comparisonHistory.data?.isStale && <p role="status" className="error-banner">The comparison series uses cached historical data.</p>}
-      <ReactECharts option={option} notMerge lazyUpdate style={{ height: overlays.has('RSI') || overlays.has('MACD') ? 520 : 390 }} />
+      <ReactECharts option={option} notMerge lazyUpdate style={{ height: (overlays.has('RSI') || overlays.has('MACD') ? 520 : 390) - (fit.compact ? 60 : 0) }} />
       <dl className="technical-summary"><Fact label="RSI 14" value={metric(technicals.data.summary?.rsi14)} /><Fact label="Annualized volatility" value={percent(technicals.data.summary?.volatility)} /><Fact label="Maximum drawdown" value={percent(technicals.data.summary?.maxDrawdown)} /><Fact label="As of" value={technicals.data.summary?.asOfDate ?? 'N/A'} /></dl>
       <p className="chart-provenance">{technicals.data.provider} · adjusted close · retrieved {new Date(technicals.data.fetchedAt).toLocaleString()}. {technicals.data.methodology}</p>
     </> : null}
   </div>;
 }
 
-function chartOption(analysis: TechnicalAnalysisResponse | undefined, comparison: MarketHistory | undefined, symbol: string, comparisonSymbol: string | undefined, overlays: Set<string>, theme: 'dark' | 'light') {
+function chartOption(analysis: TechnicalAnalysisResponse | undefined, comparison: MarketHistory | undefined, symbol: string, comparisonSymbol: string | undefined, overlays: Set<string>, theme: 'dark' | 'light', touch: boolean) {
   const points = analysis?.series ?? [];
   const compareByDate = new Map((comparison?.bars ?? []).map(row => [row.date, row.adjusted_close ?? row.close]));
   const hasComparison = Boolean(comparisonSymbol && compareByDate.size && points.length);
@@ -92,8 +93,8 @@ function chartOption(analysis: TechnicalAnalysisResponse | undefined, comparison
   if (showMacd) series.push({ name: 'MACD', type: 'line', data: points.map(row => row.macd), showSymbol: false, xAxisIndex: gridIndex, yAxisIndex: gridIndex }, { name: 'Signal', type: 'line', data: points.map(row => row.macdSignal), showSymbol: false, xAxisIndex: gridIndex, yAxisIndex: gridIndex }, { name: 'Histogram', type: 'bar', data: points.map(row => ({ value: row.macdHistogram, itemStyle: { color: alpha((row.macdHistogram ?? 0) >= 0 ? colors.gain : colors.loss, .75), borderRadius: 2 } })), xAxisIndex: gridIndex, yAxisIndex: gridIndex });
   const axis = { type: 'category', data: points.map(row => formatAxisDate(row.date)), boundaryGap: false, axisLine: { lineStyle: { color: palette.grid } }, axisLabel: { color: palette.text, hideOverlap: true }, splitLine: { show: false } };
   const xAxes = grids.map((_, index) => ({ ...axis, gridIndex: index, axisLabel: index === grids.length - 1 ? axis.axisLabel : { show: false } }));
-  const yAxes = grids.map((_, index) => { const lower = lowerNames[index - (showVolume ? 2 : 1)]; return { type: 'value', gridIndex: index, scale: index === 0, min: lower === 'RSI' ? 0 : undefined, max: lower === 'RSI' ? 100 : undefined, axisLabel: { color: palette.text, showMaxLabel: !(showVolume && index === 1), formatter: showVolume && index === 1 ? (value: number) => compact(value) : undefined }, splitNumber: showVolume && index === 1 ? 2 : undefined, splitLine: chrome.splitLine }; });
-  return { ...chrome.base, grid: grids, tooltip: chrome.tooltip, legend: { ...chrome.legend, right: 18, textStyle: { color: palette.text, fontSize: 10 } }, xAxis: xAxes, yAxis: yAxes, dataZoom: [{ type: 'inside', xAxisIndex: grids.map((_, index) => index) }], series };
+  const yAxes = grids.map((_, index) => { const lower = lowerNames[index - (showVolume ? 2 : 1)]; return { type: 'value', gridIndex: index, scale: index === 0, min: lower === 'RSI' ? 0 : undefined, max: lower === 'RSI' ? 100 : undefined, axisLabel: { color: palette.text, showMinLabel: !(index === 0 && grids.length > 1), showMaxLabel: !(showVolume && index === 1), formatter: showVolume && index === 1 ? (value: number) => compact(value) : undefined }, splitNumber: showVolume && index === 1 ? 2 : undefined, splitLine: chrome.splitLine }; });
+  return { ...chrome.base, grid: grids, tooltip: chrome.tooltip, legend: { ...chrome.legend, right: 18, textStyle: { color: palette.text, fontSize: 10 } }, xAxis: xAxes, yAxis: yAxes, dataZoom: touch ? [] : [{ type: 'inside', xAxisIndex: grids.map((_, index) => index) }], series };
 }
 
 function Fact({ label, value }: { label: string; value: string }) { return <div><dt>{label}</dt><dd>{value}</dd></div>; }

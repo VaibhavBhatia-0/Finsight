@@ -1,12 +1,13 @@
 import ReactECharts from 'echarts-for-react';
 import { Loader2 } from 'lucide-react';
 import type { ScenarioResult } from '../../api/contracts';
-import { areaFill, chartChrome, type ChartPalette, glowLine, trendColor, useChartPalette } from '../../components/chartTheme';
+import { areaFill, chartChrome, type ChartPalette, glowLine, trendColor, useChartFit, useChartPalette } from '../../components/chartTheme';
 
 interface Props { result: ScenarioResult | null; isLoading?: boolean; isError?: boolean; error?: Error }
 
 export const LabResultView = ({ result, isLoading, isError, error }: Props) => {
   const palette = useChartPalette();
+  const fit = useChartFit();
   if (isLoading) return <div className="flex items-center text-accent-300" role="status"><Loader2 className="mr-2 animate-spin" /> Running historical scenario…</div>;
   if (isError) return <p className="text-red-600">Scenario failed: {error?.message}</p>;
   if (!result) return <div className="empty-state"><p>Configure and run a scenario to see its reconciled result.</p></div>;
@@ -34,7 +35,7 @@ export const LabResultView = ({ result, isLoading, isError, error }: Props) => {
 
       <section className="panel lab-performance-panel">
         <div className="panel-header"><div><h3 className="panel-title">Performance</h3><p className="panel-subtitle">Historical base-currency valuation through the scenario period</p></div></div>
-        {result.performance_series?.length ? <ReactECharts option={performanceOption(result.performance_series, currency, palette)} notMerge lazyUpdate style={{ height: 330 }} /> : <div className="empty-state"><p>A valuation series was not returned for this scenario.</p></div>}
+        {result.performance_series?.length ? <ReactECharts option={performanceOption(result.performance_series, currency, palette, fit.touch)} notMerge lazyUpdate style={{ height: fit.height(330) }} /> : <div className="empty-state"><p>A valuation series was not returned for this scenario.</p></div>}
       </section>
 
       <section className="panel">
@@ -76,7 +77,7 @@ export const LabResultView = ({ result, isLoading, isError, error }: Props) => {
 
 function ResultMetric({ label, value, tone: valueTone }: { label: string; value: string; tone?: 'up' | 'down' }) { return <div className="result-metric"><span>{label}</span><strong className={valueTone === 'up' ? 'movement-up' : valueTone === 'down' ? 'movement-down' : ''}>{value}</strong></div>; }
 function modeTitle(mode: ScenarioResult['mode']) { return mode === 'SINGLE_INVESTMENT' ? 'Single Investment' : mode === 'RECURRING_INVESTMENT' ? 'Recurring Investment / DCA' : 'Portfolio Scenario'; }
-function performanceOption(rows: Array<{ date: string; value: number }>, currency: string, palette: ChartPalette) { const chrome = chartChrome(palette); const color = trendColor(palette, rows.map(row => row.value)); return { ...chrome.base, grid: { left: 70, right: 24, top: 26, bottom: 44 }, tooltip: { ...chrome.tooltip, valueFormatter: (value: number) => money(value, currency) }, xAxis: { type: 'category', data: rows.map(row => date(row.date)), boundaryGap: false, axisLabel: chrome.axisLabel, axisLine: chrome.axisLine }, yAxis: { type: 'value', scale: true, axisLabel: { ...chrome.axisLabel, formatter: (value: number) => new Intl.NumberFormat('en', { notation: 'compact' }).format(value) }, splitLine: chrome.splitLine }, dataZoom: [{ type: 'inside' }], series: [{ name: 'Portfolio value', type: 'line', data: rows.map(row => row.value), showSymbol: false, smooth: .3, itemStyle: { color }, lineStyle: glowLine(color), areaStyle: areaFill(color) }] }; }
+function performanceOption(rows: Array<{ date: string; value: number }>, currency: string, palette: ChartPalette, touch: boolean) { const chrome = chartChrome(palette); const color = trendColor(palette, rows.map(row => row.value)); return { ...chrome.base, grid: { left: 70, right: 24, top: 26, bottom: 44 }, tooltip: { ...chrome.tooltip, valueFormatter: (value: number) => money(value, currency) }, xAxis: { type: 'category', data: rows.map(row => date(row.date)), boundaryGap: false, axisLabel: chrome.axisLabel, axisLine: chrome.axisLine }, yAxis: { type: 'value', scale: true, axisLabel: { ...chrome.axisLabel, formatter: (value: number) => new Intl.NumberFormat('en', { notation: 'compact' }).format(value) }, splitLine: chrome.splitLine }, dataZoom: touch ? [] : [{ type: 'inside' }], series: [{ name: 'Portfolio value', type: 'line', data: rows.map(row => row.value), showSymbol: false, smooth: .3, itemStyle: { color }, lineStyle: glowLine(color), areaStyle: areaFill(color) }] }; }
 function number(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
 function money(value: unknown, currency: string) { return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(number(value)); }
 function signedMoney(value: unknown, currency: string) { const amount = number(value); return `${amount > 0 ? '+' : amount < 0 ? '-' : ''}${money(Math.abs(amount), currency)}`; }

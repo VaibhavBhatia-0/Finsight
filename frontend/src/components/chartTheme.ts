@@ -1,4 +1,4 @@
-import { useContext } from 'react';
+import { useContext, useSyncExternalStore } from 'react';
 import { ThemeContext } from '../context/ThemeContext';
 
 export type Theme = 'dark' | 'light';
@@ -49,6 +49,29 @@ export function chartPalette(theme: Theme): ChartPalette { return palettes[theme
 
 export function useChartPalette(): ChartPalette {
   return palettes[useContext(ThemeContext)?.theme ?? 'dark'];
+}
+
+function useMedia(query: string): boolean {
+  return useSyncExternalStore(
+    notify => {
+      const media = window.matchMedia?.(query);
+      media?.addEventListener('change', notify);
+      return () => media?.removeEventListener('change', notify);
+    },
+    () => window.matchMedia?.(query).matches ?? false,
+    () => false,
+  );
+}
+
+/**
+ * How charts adapt to the screen: on phones they are shorter so a whole chart fits on screen, and on touch screens
+ * drag-to-zoom is left off, because ECharts would otherwise capture a swipe that starts on the chart instead of
+ * letting the page scroll.
+ */
+export function useChartFit() {
+  const compact = useMedia('(max-width: 640px)');
+  const touch = useMedia('(pointer: coarse)');
+  return { compact, touch, height: (desktop: number) => (compact ? Math.round(desktop * .7) : desktop) };
 }
 
 /** `#rrggbb` → `rgba(r,g,b,a)`; other colour strings are returned unchanged. */
